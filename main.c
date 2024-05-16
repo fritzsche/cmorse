@@ -32,11 +32,12 @@ int main(int argc, char** argv)
     ma_waveform_config sineWaveConfig;
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
-    deviceConfig.playback.format   = DEVICE_FORMAT;
-    deviceConfig.playback.channels = DEVICE_CHANNELS;
-    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
+//    deviceConfig.playback.format   = DEVICE_FORMAT;
+//    deviceConfig.playback.channels = DEVICE_CHANNELS;
+//    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     deviceConfig.dataCallback      = data_callback;
     deviceConfig.pUserData         = &sineWave;
+    deviceConfig.periodSizeInFrames = 64;
 
     if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
         printf("Failed to open playback device.\n");
@@ -45,7 +46,7 @@ int main(int argc, char** argv)
 
     printf("Device Name: %s\n", device.playback.name);
 
-    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, 0.2, 620);
+    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, 0.2, 500);
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
     if (ma_device_start(&device) != MA_SUCCESS) {
