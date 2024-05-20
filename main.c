@@ -5,13 +5,17 @@
 
 #include <stdio.h>
 
+#include <conio.h>
+
 
 #define DEVICE_FORMAT       ma_format_f32
-#define DEVICE_CHANNELS     2
+#define DEVICE_CHANNELS     1
 #define DEVICE_SAMPLE_RATE  48000
 
 #define LPF_FREQ     1000
 #define LPF_ORDER    3
+
+#define WPM          20
 
 
 struct audioUserData {
@@ -51,17 +55,17 @@ int main(int argc, char** argv)
     ma_lpf2_config lpfConfig;
     ma_lpf2 lpf;   
 
-    struct audioUserData userData;
+    callBackData userData;
 
     userData.pWaveForm = &sineWave;
     userData.pLpf = &lpf; 
  
     deviceConfig = ma_device_config_init(ma_device_type_playback);
     deviceConfig.playback.format   = DEVICE_FORMAT; //DEVICE_FORMAT;
-//    deviceConfig.playback.channels = DEVICE_CHANNELS;
+    deviceConfig.playback.channels = DEVICE_CHANNELS;
 //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     deviceConfig.dataCallback      = data_callback;
-    deviceConfig.pUserData         = &userData;//&sineWave;
+    deviceConfig.pUserData         = &userData;
     deviceConfig.periodSizeInFrames = 64;
 
     if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
