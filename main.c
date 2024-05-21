@@ -5,7 +5,7 @@
 
 #include <stdio.h>
 
-#include <conio.h>
+
 
 
 #define DEVICE_FORMAT       ma_format_f32
@@ -14,6 +14,7 @@
 
 #define LPF_FREQ     1000
 #define LPF_ORDER    3
+#define SIN_FREQ     500
 
 #define WPM          20
 
@@ -27,21 +28,15 @@ typedef struct audioUserData callBackData;
 
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
-    ma_waveform* pSineWave;
-    ma_lpf2* pLpf;
-
     callBackData *userData;    
     MA_ASSERT(pDevice->playback.channels == DEVICE_CHANNELS);
     userData = (callBackData*)pDevice->pUserData;
 
-    pSineWave = userData->pWaveForm;
-    MA_ASSERT(pSineWave != NULL);
-    pLpf = userData->pLpf;
-    MA_ASSERT(pLpf != NULL);
+    MA_ASSERT(userData->pWaveForm != NULL);
+    MA_ASSERT(userData->pLpf != NULL);
 
-    ma_waveform_read_pcm_frames(pSineWave, pOutput, frameCount, NULL);
-
-    ma_lpf2_process_pcm_frames(pLpf, pOutput, pOutput, frameCount);
+    ma_waveform_read_pcm_frames(userData->pWaveForm, pOutput, frameCount, NULL);
+    ma_lpf2_process_pcm_frames(userData->pLpf, pOutput, pOutput, frameCount);
 
     (void)pInput;   /* Unused. */
 }
@@ -82,7 +77,7 @@ int main(int argc, char** argv)
     return -6;
    }
 
-    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, 0.2, 500);
+    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, 0.2, SIN_FREQ);
 
 
     ma_waveform_init(&sineWaveConfig, &sineWave);
