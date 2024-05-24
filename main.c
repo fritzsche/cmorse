@@ -15,6 +15,7 @@
 #define LPF_FREQ     1000
 #define LPF_ORDER    3
 #define SIN_FREQ     500
+#define SIN_AMP      0.2
 
 #define WPM          20
 
@@ -22,6 +23,7 @@
 struct audioUserData {
   ma_waveform *pWaveForm;
   ma_lpf2 *pLpf;
+  uint32_t sample_per_dit;
 };
 
 typedef struct audioUserData callBackData;
@@ -77,8 +79,14 @@ int main(int argc, char** argv)
     return -6;
    }
 
-    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, 0.2, SIN_FREQ);
+    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, SIN_FREQ);
 
+    printf("Sample rate: %d   Channels: %d\n",device.sampleRate, device.playback.channels);
+
+    double dit_len_in_s = 6.0 / ( 5.0 * WPM );
+    double sample_len_in_s = 1.0 / device.sampleRate;
+
+    userData.sample_per_dit = dit_len_in_s / sample_len_in_s;
 
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
