@@ -1,11 +1,9 @@
 #define MA_NO_DECODING
 #define MA_NO_ENCODING
 #define MINIAUDIO_IMPLEMENTATION
-#include "miniaudio.h"
-
 #include <stdio.h>
-
-
+#include "miniaudio.h"
+#include "blackman.h"
 
 
 #define DEVICE_FORMAT       ma_format_f32
@@ -16,8 +14,9 @@
 #define LPF_ORDER    3
 #define SIN_FREQ     500
 #define SIN_AMP      0.2
-
 #define WPM          20
+
+#define RAMP_TIME   0.005
 
 
 struct audioUserData {
@@ -27,6 +26,16 @@ struct audioUserData {
 };
 
 typedef struct audioUserData callBackData;
+
+
+
+double dit_length_in_sec(int wpm) {
+    return  6.0 / ( 5.0 * wpm );
+}
+
+int samples_per_dit(int wpm, int sample_rate) {
+    return dit_length_in_sec(wpm) * sample_rate;
+}
 
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
@@ -42,6 +51,7 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
 
     (void)pInput;   /* Unused. */
 }
+
 
 int main(int argc, char** argv)
 {
@@ -69,9 +79,7 @@ int main(int argc, char** argv)
         printf("Failed to open playback device.\n");
         return -4;
     }
-
     printf("Device Name: %s\n", device.playback.name);
-
 
    lpfConfig = ma_lpf2_config_init(device.playback.format, device.playback.channels, device.sampleRate, LPF_FREQ, 0.707);
    if( ma_lpf2_init(&lpfConfig, NULL, &lpf) != MA_SUCCESS) {
@@ -83,12 +91,24 @@ int main(int argc, char** argv)
 
     printf("Sample rate: %d   Channels: %d\n",device.sampleRate, device.playback.channels);
 
-    double dit_len_in_s = 6.0 / ( 5.0 * WPM );
-    double sample_len_in_s = 1.0 / device.sampleRate;
+ //   double dit_len_in_s = 6.0 / ( 5.0 * WPM );
+ //   double dit_len_in_s = dit_length_in_sec( WPM );
+ //   double sample_len_in_s = 1.0 / device.sampleRate;
 
-    userData.sample_per_dit = dit_len_in_s / sample_len_in_s;
+    userData.sample_per_dit = samples_per_dit(WPM,device.sampleRate);//dit_len_in_s / sample_len_in_s;
 
     ma_waveform_init(&sineWaveConfig, &sineWave);
+
+// QEX May/Jone 2006 3 / CW Shaping in DSP Software
+    int ramp_samples = 2.7 * RAMP_TIME * device.sampleRate;
+
+    double *pRamp = malloc(ramp_samples * sizeof(double));
+    if (pRamp == NULL) {
+        printf("Memory Allocation Failed!");
+        return -7;
+    }
+    backman_harris_step_response(pRamp, ramp_samples);
+
 
     if (ma_device_start(&device) != MA_SUCCESS) {
         printf("Failed to start playback device.\n");
