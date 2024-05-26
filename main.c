@@ -13,16 +13,25 @@
 #define LPF_FREQ     1000
 #define LPF_ORDER    3
 #define SIN_FREQ     500
-#define SIN_AMP      0.2
+#define SIN_AMP      1
 #define WPM          20
 
 #define RAMP_TIME   0.005
 
 
+ #define max(a,b) \
+   ({ __typeof__ (a) _a = (a); \
+       __typeof__ (b) _b = (b); \
+     _a > _b ? _a : _b; })
+
 struct audioUserData {
   ma_waveform *pWaveForm;
-  ma_lpf2 *pLpf;
+  ma_lpf2 *pLpf;  
   uint32_t sample_per_dit;
+  double *ramp;
+  int ramp_samples;
+  // number of samples processed
+  long long sample_count;
 };
 
 typedef struct audioUserData callBackData;
@@ -40,14 +49,37 @@ int samples_per_dit(int wpm, int sample_rate) {
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
     callBackData *userData;    
-    MA_ASSERT(pDevice->playback.channels == DEVICE_CHANNELS);
+    MA_ASSERT(pDevice->playback.channels = DEVICE_CHANNELS);
     userData = (callBackData*)pDevice->pUserData;
 
     MA_ASSERT(userData->pWaveForm != NULL);
     MA_ASSERT(userData->pLpf != NULL);
+    MA_ASSERT(pDevice->playback.format == DEVICE_FORMAT);
+
+   
+   float *samples = (float *) pOutput;
 
     ma_waveform_read_pcm_frames(userData->pWaveForm, pOutput, frameCount, NULL);
-    ma_lpf2_process_pcm_frames(userData->pLpf, pOutput, pOutput, frameCount);
+
+
+    if (userData->sample_count < userData->ramp_samples ) {
+        for(int i = 0; i<frameCount; i++) {
+                
+            if (userData->sample_count + i < userData->ramp_samples) {
+              printf("\n%i/%i\n",i,i+userData->sample_count);     
+              samples[i] *= userData->ramp[userData->sample_count+i];
+              printf("(%f/%f)",samples[i],userData->ramp[userData->sample_count+i]);         
+            }
+//            if (i >= frameCount) exit;
+//            printf("(%f)",samples[i-userData->sample_count]);            
+//            samples[i-userData->sample_count] *= userData->ramp[i];
+//            printf("|%f|",samples[i-userData->sample_count]);
+        }
+
+    }
+ //   MA_ASSERT(1 == 0);
+//    ma_lpf2_process_pcm_frames(userData->pLpf, pOutput, pOutput, frameCount);
+    userData->sample_count += frameCount;
 
     (void)pInput;   /* Unused. */
 }
@@ -66,6 +98,7 @@ int main(int argc, char** argv)
 
     userData.pWaveForm = &sineWave;
     userData.pLpf = &lpf; 
+    userData.sample_count = 0;
  
     deviceConfig = ma_device_config_init(ma_device_type_playback);
     deviceConfig.playback.format   = DEVICE_FORMAT; //DEVICE_FORMAT;
@@ -102,12 +135,14 @@ int main(int argc, char** argv)
 // QEX May/Jone 2006 3 / CW Shaping in DSP Software
     int ramp_samples = 2.7 * RAMP_TIME * device.sampleRate;
 
-    double *pRamp = malloc(ramp_samples * sizeof(double));
-    if (pRamp == NULL) {
+    userData.ramp_samples = ramp_samples;
+
+    userData.ramp = malloc(ramp_samples * sizeof(double));
+    if (userData.ramp == NULL) {
         printf("Memory Allocation Failed!");
         return -7;
     }
-    backman_harris_step_response(pRamp, ramp_samples);
+    backman_harris_step_response(userData.ramp, ramp_samples);
 
 
     if (ma_device_start(&device) != MA_SUCCESS) {
@@ -119,6 +154,7 @@ int main(int argc, char** argv)
     printf("Press Enter to quit...\n");
     getchar();
     
+    printf("Number of Samples: %lli\n", userData.sample_count );
     ma_device_uninit(&device);
     
     (void)argc;
