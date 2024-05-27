@@ -18,16 +18,16 @@
 
 #define RAMP_TIME   0.005
 
-
+/*
  #define max(a,b) \
    ({ __typeof__ (a) _a = (a); \
        __typeof__ (b) _b = (b); \
      _a > _b ? _a : _b; })
-
+*/
 struct audioUserData {
   ma_waveform *pWaveForm;
   ma_lpf2 *pLpf;  
-  uint32_t sample_per_dit;
+  int sample_per_dit;
   double *ramp;
   int ramp_samples;
   // number of samples processed
