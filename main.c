@@ -14,7 +14,7 @@
 #define LPF_ORDER 3
 #define SIN_FREQ 500
 #define SIN_AMP 1
-#define WPM 20
+#define WPM 25
 
 #define DIT 0
 #define DAH 1
@@ -24,17 +24,16 @@
 
 struct audioUserData
 {
+    // waveform to output     
     ma_waveform *pWaveForm;
-    ma_lpf2 *pLpf;
+    // Number of samples per dit
     int sample_per_dit;
-    double *ramp;
-    int ramp_samples;
-    // number of samples processed
-    long long sample_count;
     // dit envelope
     double *dit_envelop;
     // position in envelop shape
     long long envelop_position;
+    // number of samples processed
+    long long sample_count;    
 };
 
 typedef struct audioUserData callBackData;
@@ -78,9 +77,8 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
     userData = (callBackData *)pDevice->pUserData;
 
     MA_ASSERT(userData->pWaveForm != NULL);
-    MA_ASSERT(userData->pLpf != NULL);
+//    MA_ASSERT(userData->pLpf != NULL);
     MA_ASSERT(pDevice->playback.format == DEVICE_FORMAT);
-
     MA_ASSERT(userData->dit_envelop != NULL);
 
     float *samples = (float *)pOutput;
@@ -89,7 +87,6 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
 
     for (int i = 0; i < frameCount; i++)
     {
-        //  printf("-%lli\n",userData->envelop_count);
         samples[i] *= userData->dit_envelop[userData->envelop_position++];
         if (userData->envelop_position == 2 * userData->sample_per_dit)
             userData->envelop_position = 0;
@@ -111,11 +108,11 @@ int main(int argc, char **argv)
     callBackData userData;
 
     userData.pWaveForm = &sineWave;
-    userData.pLpf = &lpf;
+  //  userData.pLpf = &lpf;
     userData.sample_count = 0;
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
-    deviceConfig.playback.format = DEVICE_FORMAT; // DEVICE_FORMAT;
+//    deviceConfig.playback.format = DEVICE_FORMAT; // DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     deviceConfig.dataCallback = data_callback;
@@ -128,32 +125,31 @@ int main(int argc, char **argv)
         return -4;
     }
     printf("Device Name: %s\n", device.playback.name);
-
+/*
     lpfConfig = ma_lpf2_config_init(device.playback.format, device.playback.channels, device.sampleRate, LPF_FREQ, 0.707);
     if (ma_lpf2_init(&lpfConfig, NULL, &lpf) != MA_SUCCESS)
     {
         printf("Failed to init lpf\n");
         return -6;
     }
-
+*/
     sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, SIN_FREQ);
-
     printf("Sample rate: %d   Channels: %d\n", device.sampleRate, device.playback.channels);
-
-    userData.sample_per_dit = samples_per_dit(WPM, device.sampleRate); // dit_len_in_s / sample_len_in_s;
-
+    userData.sample_per_dit = samples_per_dit(WPM, device.sampleRate); 
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
     // QEX May/Jone 2006 3 / CW Shaping in DSP Software
     int ramp_samples = samples_per_ramp(  RAMP_TIME, device.sampleRate);
 
-    userData.ramp_samples = ramp_samples;
 
     int dit_length = samples_per_dit(WPM, device.sampleRate);
-    double *pEnvelop = malloc(2 * dit_length * sizeof(double));
-    generate_envelope(pEnvelop, dit_length, ramp_samples, 2 * dit_length);
+    double *pDitEnvelop = malloc(2 * dit_length * sizeof(double));
+    generate_envelope(pDitEnvelop, dit_length, ramp_samples, 2 * dit_length);
 
-    userData.dit_envelop = pEnvelop;
+    double *pDahEnvelop = malloc(4 * dit_length * sizeof(double));
+    generate_envelope(pDahEnvelop, 3*dit_length, ramp_samples, 4 * dit_length);
+
+    userData.dit_envelop = pDitEnvelop;
     userData.envelop_position = 0;
 
 
