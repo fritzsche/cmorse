@@ -6,7 +6,7 @@ enable_testing()
 
 
 
-add_executable(cmorse main.c blackman.c)
+add_executable(cmorse main.c blackman.c midi.c)
 
 if(UNIX AND NOT APPLE)
  message(STATUS ">>> Linux")

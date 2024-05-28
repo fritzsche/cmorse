@@ -5,6 +5,9 @@
 #include <stdio.h>
 #include "miniaudio.h"
 #include "blackman.h"
+#include "midi.h"
+
+
 
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
@@ -15,7 +18,7 @@
 #define LPF_ORDER 3
 #define SIN_FREQ 500
 #define SIN_AMP 1
-#define WPM 12
+#define WPM 20
 
 #define DIT 0
 #define DAH 1
@@ -31,6 +34,7 @@ struct envelop_data
     double *envelop;
     // length of the envelop in frames
     int length;
+    // store playback position
     int playback_position;
 };
 
@@ -123,6 +127,9 @@ int main(int argc, char **argv)
 
     call_back_data_type userData;
 
+
+    open_midi();
+    return 0;
     userData.pWaveForm = &sineWave;
     userData.sample_count = 0;
 
