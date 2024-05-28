@@ -1,6 +1,7 @@
 #define MA_NO_DECODING
 #define MA_NO_ENCODING
 #define MINIAUDIO_IMPLEMENTATION
+
 #include <stdio.h>
 #include "miniaudio.h"
 #include "blackman.h"
@@ -41,10 +42,6 @@ struct call_back_data
     ma_waveform *pWaveForm;
     // Number of samples per dit
     int sample_per_dit;
-    // dit envelope
-    double *dit_envelop;
-    // position in envelop shape
-    long long envelop_position;
     // number of samples processed
     long long sample_count;
     // DIT/DAH Memory
@@ -80,6 +77,8 @@ void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int 
     // set the tone samples to 1
     for (int i = 0; i < tone_samples; i++)
         pOutput[i] = 1.0;
+
+    // QEX May/Jone 2006 3 / CW Shaping in DSP Software        
     // generate ramp up
     backman_harris_step_response(pOutput, ramp_samples);
     // copy ramp up to ramp down (inverse order)
@@ -91,24 +90,24 @@ void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int 
 
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
+    
     call_back_data_type *userData;
     MA_ASSERT(pDevice->playback.channels = DEVICE_CHANNELS);
     userData = (call_back_data_type *)pDevice->pUserData;
 
     MA_ASSERT(userData->pWaveForm != NULL);
-//    MA_ASSERT(userData->pLpf != NULL);
     MA_ASSERT(pDevice->playback.format == DEVICE_FORMAT);
-    MA_ASSERT(userData->dit_envelop != NULL);
 
     float *samples = (float *)pOutput;
 
     ma_waveform_read_pcm_frames(userData->pWaveForm, pOutput, frameCount, NULL);
 
+   int ce = userData->current_element;
+
     for (int i = 0; i < frameCount; i++)
     {
-        samples[i] *= userData->dit_envelop[userData->envelop_position++];
-        if (userData->envelop_position == 2 * userData->sample_per_dit)
-            userData->envelop_position = 0;
+        samples[i] *= userData->envelop[ce].envelop[userData->envelop[ce].playback_position++];
+        if (userData->envelop[ce].playback_position == userData->envelop[ce].length) userData->envelop[ce].playback_position = 0;
     }
     userData->sample_count += frameCount;
 
@@ -121,13 +120,10 @@ int main(int argc, char **argv)
     ma_device_config deviceConfig;
     ma_device device;
     ma_waveform_config sineWaveConfig;
-    ma_lpf2_config lpfConfig;
-    ma_lpf2 lpf;
 
     call_back_data_type userData;
 
     userData.pWaveForm = &sineWave;
-  //  userData.pLpf = &lpf;
     userData.sample_count = 0;
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
@@ -144,32 +140,31 @@ int main(int argc, char **argv)
         return -4;
     }
     printf("Device Name: %s\n", device.playback.name);
-/*
-    lpfConfig = ma_lpf2_config_init(device.playback.format, device.playback.channels, device.sampleRate, LPF_FREQ, 0.707);
-    if (ma_lpf2_init(&lpfConfig, NULL, &lpf) != MA_SUCCESS)
-    {
-        printf("Failed to init lpf\n");
-        return -6;
-    }
-*/
+
     sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, SIN_FREQ);
     printf("Sample rate: %d   Channels: %d\n", device.sampleRate, device.playback.channels);
     userData.sample_per_dit = samples_per_dit(WPM, device.sampleRate); 
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
-    // QEX May/Jone 2006 3 / CW Shaping in DSP Software
+
     int ramp_samples = samples_per_ramp(  RAMP_TIME, device.sampleRate);
-
-
     int dit_length = samples_per_dit(WPM, device.sampleRate);
+
     double *pDitEnvelop = malloc(2 * dit_length * sizeof(double));
     generate_envelope(pDitEnvelop, dit_length, ramp_samples, 2 * dit_length);
 
     double *pDahEnvelop = malloc(4 * dit_length * sizeof(double));
     generate_envelope(pDahEnvelop, 3*dit_length, ramp_samples, 4 * dit_length);
 
-    userData.dit_envelop = pDitEnvelop;
-    userData.envelop_position = 0;
+    userData.envelop[DIT].envelop = pDitEnvelop;
+    userData.envelop[DIT].length = 2 * dit_length;
+    userData.envelop[DIT].playback_position = 0;
+
+    userData.envelop[DAH].envelop = pDahEnvelop;
+    userData.envelop[DAH].length = 4 * dit_length;
+    userData.envelop[DAH].playback_position = 0;
+
+    userData.current_element = DAH;
 
 
     if (ma_device_start(&device) != MA_SUCCESS)
