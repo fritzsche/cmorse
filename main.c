@@ -33,9 +33,9 @@ struct envelop_data
     int playback_position;
 };
 
-typedef struct envelop_data key_envelop;
+typedef struct envelop_data key_envelop_type;
 
-struct audioUserData
+struct call_back_data
 {
     // waveform to output     
     ma_waveform *pWaveForm;
@@ -52,10 +52,10 @@ struct audioUserData
     // current element
     int current_element;
     // keying shape envelop data
-    key_envelop envelop[2];
+    key_envelop_type envelop[2];
 };
 
-typedef struct audioUserData callBackData;
+typedef struct call_back_data call_back_data_type;
 
 double dit_length_in_sec(int wpm)
 {
@@ -91,9 +91,9 @@ void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int 
 
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
-    callBackData *userData;
+    call_back_data_type *userData;
     MA_ASSERT(pDevice->playback.channels = DEVICE_CHANNELS);
-    userData = (callBackData *)pDevice->pUserData;
+    userData = (call_back_data_type *)pDevice->pUserData;
 
     MA_ASSERT(userData->pWaveForm != NULL);
 //    MA_ASSERT(userData->pLpf != NULL);
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
     ma_lpf2_config lpfConfig;
     ma_lpf2 lpf;
 
-    callBackData userData;
+    call_back_data_type userData;
 
     userData.pWaveForm = &sineWave;
   //  userData.pLpf = &lpf;
