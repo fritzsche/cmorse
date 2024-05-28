@@ -14,13 +14,26 @@
 #define LPF_ORDER 3
 #define SIN_FREQ 500
 #define SIN_AMP 1
-#define WPM 25
+#define WPM 12
 
 #define DIT 0
 #define DAH 1
 #define NONE -1
 
 #define RAMP_TIME 0.005
+
+
+
+struct envelop_data
+{
+    // envelop -1,...,+1
+    double *envelop;
+    // length of the envelop in frames
+    int length;
+    int playback_position;
+};
+
+typedef struct envelop_data key_envelop;
 
 struct audioUserData
 {
@@ -33,7 +46,13 @@ struct audioUserData
     // position in envelop shape
     long long envelop_position;
     // number of samples processed
-    long long sample_count;    
+    long long sample_count;
+    // DIT/DAH Memory
+    int memory[2];
+    // current element
+    int current_element;
+    // keying shape envelop data
+    key_envelop envelop[2];
 };
 
 typedef struct audioUserData callBackData;
