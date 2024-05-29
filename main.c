@@ -105,9 +105,15 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
 
     for (int i = 0; i < frameCount; i++)
     {
-        samples[i] *= userData->envelop[ce].envelop[userData->envelop[ce].playback_position++];
-        if (userData->envelop[ce].playback_position == userData->envelop[ce].length)
-            userData->envelop[ce].playback_position = 0;
+        if (userData->memory[0] == 1)
+        {
+            samples[i] *= userData->envelop[ce].envelop[userData->envelop[ce].playback_position++];
+            if (userData->envelop[ce].playback_position == userData->envelop[ce].length) {
+                userData->memory[0] = 0;
+                userData->envelop[ce].playback_position = 0;
+            }    
+        } else samples[i] = 0;
+
     }
     userData->sample_count += frameCount;
 
@@ -122,7 +128,7 @@ int main(int argc, char **argv)
     ma_waveform_config sineWaveConfig;
     call_back_data_type userData;
 
-    open_midi();
+    open_midi(&userData.memory);
 
     userData.pWaveForm = &sineWave;
     userData.sample_count = 0;

@@ -8,6 +8,9 @@
 #define MIDI_DAH 0x30
 #define MIDI_DIT 0x32
 
+
+
+
 // CoreMIDI-Handles
 void *coreMIDI;
 
@@ -26,12 +29,14 @@ ItemCount (*MyMIDIGetNumberOfSources)(void);
 void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *srcConnRefCon)
 {
     MIDIPacket *packet = (MIDIPacket *)pktlist->packet;
+    int *mem = (int *)readProcRefCon;
     for (UInt32 i = 0; i < pktlist->numPackets; i++)
     {
         if (packet->length > 2) {
             switch(packet->data[0]) {
                 case MIDI_ON:
                   printf("PRESS\n");
+                  mem[0] = 1;
                   break;
                 case MIDI_OFF:
                  printf("Release\n");
@@ -42,7 +47,7 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
     }
 }
 
-int open_midi()
+int open_midi(void* pMemory)
 {
     printf("Initializing MIDI...\n");
     // dynamic load CoreMidi
@@ -69,7 +74,8 @@ int open_midi()
     MyMIDIClientCreate(client_name, NULL, NULL, &client);
 
     MIDIPortRef inputPort;
-    MyMIDIInputPortCreate(client, port_name, MyMIDIReadProc, NULL, &inputPort);
+
+    MyMIDIInputPortCreate(client, port_name, MyMIDIReadProc, pMemory, &inputPort);
     ItemCount numOfSources = MyMIDIGetNumberOfSources();
     if (numOfSources == 0)
     {
