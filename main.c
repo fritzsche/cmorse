@@ -7,8 +7,6 @@
 #include "blackman.h"
 #include "midi.h"
 
-
-
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
 #define DEVICE_SAMPLE_RATE 48000
@@ -25,7 +23,6 @@
 #define NONE -1
 
 #define RAMP_TIME 0.005
-
 
 
 struct envelop_data
@@ -124,12 +121,11 @@ int main(int argc, char **argv)
     ma_device_config deviceConfig;
     ma_device device;
     ma_waveform_config sineWaveConfig;
-
     call_back_data_type userData;
 
 
     open_midi();
-    return 0;
+  //  return 0;
     userData.pWaveForm = &sineWave;
     userData.sample_count = 0;
 
@@ -153,7 +149,7 @@ int main(int argc, char **argv)
     userData.sample_per_dit = samples_per_dit(WPM, device.sampleRate); 
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
-
+    // setup dit and dah key envolop shapes
     int ramp_samples = samples_per_ramp(  RAMP_TIME, device.sampleRate);
     int dit_length = samples_per_dit(WPM, device.sampleRate);
 

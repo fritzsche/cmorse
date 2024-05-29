@@ -1,18 +1,11 @@
 
 #include <stdio.h>
 #include <CoreMIDI/CoreMIDI.h>
-//#include <CoreFoundation/CoreFoundation.h>
 #include <dlfcn.h>
-
 
 // CoreMIDI-Handles
 void *coreMIDI;
 void *coreFoundation;
-
-//OSStatus (*MIDIClientCreate)(CFStringRef clientName, MIDINotifyProc notifyProc, void *notifyRefCon, MIDIClientRef *outClient);
-//OSStatus (*MIDIInputPortCreate)(MIDIClientRef client, CFStringRef portName, MIDIPacketListCallback readProc, void *refCon, MIDIPortRef *outPort);
-
-
 
 // Funktionstypen für CoreMIDI-Funktionen
 typedef void (*MIDIPacketListCallback)(const void *pktlist, void *readProcRefCon, void *srcConnRefCon);
@@ -32,10 +25,15 @@ OSStatus (*MyMIDIInputPortCreate)(	MIDIClientRef		client,
 
 CFStringRef (*MyCFStringCreateWithCString)(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding);
 
+OSStatus (*MyMIDIPortConnectSource)(	MIDIPortRef		port,
+						MIDIEndpointRef	source,
+						void * __nullable			connRefCon );
+
+
 int (*MyMIDIGetSource)(	ItemCount sourceIndex0 );	
 
+ItemCount (*MyMIDIGetNumberOfSources)(void);
 
-//gcc -o midi_input midi_input.c -framework CoreMIDI -framework CoreFoundation
 
 void MyMIDINotifyProc(const MIDINotification *message, void *refCon)
 {
@@ -79,6 +77,8 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
 
 int open_midi()
 {
+
+    printf("Initializing MIDI...\n");    
     // dynamic load CoreMidi
     coreMIDI = dlopen("/System/Library/Frameworks/CoreMIDI.framework/CoreMIDI", RTLD_NOW);
     if (!coreMIDI) {
@@ -86,7 +86,7 @@ int open_midi()
         return 1;
     }
 
-    // dynamic load of CoreFoundation
+    // dynamic load CoreFoundation
     coreFoundation = dlopen("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", RTLD_NOW);
     if (!coreFoundation) {
         fprintf(stderr, "Fehler beim Laden der CoreFoundation-Bibliothek: %s\n", dlerror());
@@ -97,34 +97,30 @@ int open_midi()
     MyMIDIInputPortCreate = dlsym(coreMIDI, "MIDIInputPortCreate");
     MyCFStringCreateWithCString = dlsym(coreMIDI, "CFStringCreateWithCString");
     MyMIDIGetSource = dlsym(coreMIDI, "MIDIGetSource");
-
+    MyMIDIPortConnectSource = dlsym(coreMIDI, "MIDIPortConnectSource");
+    MyMIDIGetNumberOfSources  = dlsym(coreMIDI, "MIDIGetNumberOfSources");
 
 
    CFStringRef client_name = MyCFStringCreateWithCString(NULL, "MIDI Client", kCFStringEncodingMacRoman);
    CFStringRef port_name = MyCFStringCreateWithCString(NULL, "Input Port", kCFStringEncodingMacRoman);
 
-
-    MIDIClientRef client;
-
-    MyMIDIClientCreate(client_name, NULL, NULL, &client);
-
-
     dlclose(coreMIDI);
     dlclose(coreFoundation);
-    
+
+    MIDIClientRef client;
+    MyMIDIClientCreate(client_name, NULL, NULL, &client);
+
     MIDIPortRef inputPort; 
     MyMIDIInputPortCreate(client, port_name, MyMIDIReadProc, NULL, &inputPort); 
-
-/*
-    ItemCount numOfSources = MIDIGetNumberOfSources();
+    ItemCount numOfSources = MyMIDIGetNumberOfSources();
     if (numOfSources == 0)
     {
         printf("No MIDI sources found.\n");
         return 1;
     }
-*/
-    MIDIEndpointRef source = MyMIDIGetSource(0); // We use the first MIDI source
-    MIDIPortConnectSource(inputPort, source, NULL);
+
+    MIDIEndpointRef source = MyMIDIGetSource(0); // use the first MIDI source
+    MyMIDIPortConnectSource(inputPort, source, NULL);
 
     printf("Listening for MIDI events...\n");
     printf("Press Ctrl+C to exit.\n");
