@@ -111,30 +111,7 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
     key_state_type *key = (key_state_type *)readProcRefCon;
     for (UInt32 i = 0; i < pktlist->numPackets; i++)
     {
-        if (packet->length > 2)
-        {
-            switch (packet->data[0])
-            {
-            case MIDI_NOTE_ON:
-                if (packet->data[1] == MIDI_DIT)
-                {
-                    key->memory[DIT] = TRUE;
-                    key->state[DIT] = TRUE;
-                }
-                else
-                {
-                    key->memory[DAH] = TRUE;
-                    key->state[DAH] = TRUE;
-                }
-                break;
-            case MIDI_NOTE_OFF:
-                if (packet->data[1] == MIDI_DIT)
-                    key->state[DIT] = 0;
-                else
-                    key->state[DAH] = 0;
-                break;
-            }
-        }
+        if (packet->length > 2) update_keyer(packet->data[0],packet->data[1],key);
         packet = MIDIPacketNext(packet);
     }
 }
