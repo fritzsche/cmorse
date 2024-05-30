@@ -1,11 +1,13 @@
+
+
 #define MA_NO_DECODING
 #define MA_NO_ENCODING
 #define MINIAUDIO_IMPLEMENTATION
+#include "miniaudio.h"
 
 #include <stdio.h>
-#include "miniaudio.h"
-#include "blackman.h"
 #include "morse.h"
+#include "blackman.h"
 #include "midi.h"
 
 #define DEVICE_FORMAT ma_format_f32
@@ -16,38 +18,6 @@
 #define SIN_FREQ 500
 #define SIN_AMP 1
 #define WPM 20
-
-
-
-struct envelop_data
-{
-    // envelop -1,...,+1
-    double *envelop;
-    // length of the envelop in frames
-    int length;
-    // store playback position
-    int playback_position;
-};
-
-typedef struct envelop_data key_envelop_type;
-
-struct call_back_data
-{
-    // waveform to output
-    ma_waveform *pWaveForm;
-    // Number of samples per dit
-    int sample_per_dit;
-    // number of samples processed
-    long long sample_count;
-    // DIT/DAH Memory
-    int memory[2];
-    // current element
-    int current_element;
-    // keying shape envelop data
-    key_envelop_type envelop[2];
-};
-
-typedef struct call_back_data call_back_data_type;
 
 double dit_length_in_sec(int wpm)
 {
