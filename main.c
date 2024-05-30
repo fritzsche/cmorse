@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include "miniaudio.h"
 #include "blackman.h"
+#include "morse.h"
 #include "midi.h"
 
 #define DEVICE_FORMAT ma_format_f32
@@ -12,17 +13,11 @@
 #define DEVICE_SAMPLE_RATE 48000
 #define DEVICE_FRAMES 64
 
-#define LPF_FREQ 1000
-#define LPF_ORDER 3
 #define SIN_FREQ 500
 #define SIN_AMP 1
 #define WPM 20
 
-#define DIT 0
-#define DAH 1
-#define NONE -1
 
-#define RAMP_TIME 0.005
 
 struct envelop_data
 {

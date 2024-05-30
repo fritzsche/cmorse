@@ -1,15 +1,10 @@
 #include <stdio.h>
-#include <CoreMIDI/CoreMIDI.h>
 #include <dlfcn.h>
 
-#define MIDI_ON 0x90
-#define MIDI_OFF 0x80
+#include "midi.h"
+#include "morse.h"
 
-#define MIDI_DAH 0x30
-#define MIDI_DIT 0x32
-
-
-
+#include <CoreMIDI/CoreMIDI.h>
 
 // CoreMIDI-Handles
 void *coreMIDI;
@@ -32,13 +27,19 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
     int *mem = (int *)readProcRefCon;
     for (UInt32 i = 0; i < pktlist->numPackets; i++)
     {
-        if (packet->length > 2) {
+        if (packet->length > 2) {             
             switch(packet->data[0]) {
-                case MIDI_ON:
-                  printf("PRESS\n");
-                  mem[0] = 1;
+                case MIDI_NOTE_ON:
+
+                  if(packet->data[1] == MIDI_DIT) {
+                    printf("PRESS Dit\n");
+                    mem[DIT] = TRUE;
+                  } else {
+                    printf("PRESS Dah\n");
+                    mem[DAH] = TRUE;
+                  }
                   break;
-                case MIDI_OFF:
+                case MIDI_NOTE_OFF:
                  printf("Release\n");
                 break;      
             }
