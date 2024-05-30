@@ -37,6 +37,9 @@ struct call_back_data
 };
 
 typedef struct call_back_data call_back_data_type;
-
+void generate_envelope(double *, int, int, int);
+double dit_length_in_sec(int);
+int samples_per_dit(int, int);
+int samples_per_ramp(double, int);
 
 #endif 

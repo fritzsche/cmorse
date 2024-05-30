@@ -1,11 +1,9 @@
 
-
 #define MA_NO_DECODING
 #define MA_NO_ENCODING
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
 
-#include <stdio.h>
 #include "morse.h"
 #include "blackman.h"
 #include "midi.h"
@@ -19,43 +17,8 @@
 #define SIN_AMP 1
 #define WPM 20
 
-double dit_length_in_sec(int wpm)
-{
-    return 1.2 / wpm;
-}
-
-int samples_per_dit(int wpm, int sample_rate)
-{
-    return dit_length_in_sec(wpm) * sample_rate;
-}
-
-int samples_per_ramp(double ramp_time, int sample_rate)
-{
-    return 2.7 * ramp_time * sample_rate;
-}
-
-void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int length)
-{
-    MA_ASSERT(tone_samples > ramp_samples);
-    // initialize memory with 0
-    memset(pOutput, 0, sizeof(double) * length);
-    // set the tone samples to 1
-    for (int i = 0; i < tone_samples; i++)
-        pOutput[i] = 1.0;
-
-    // QEX May/Jone 2006 3 / CW Shaping in DSP Software
-    // generate ramp up
-    backman_harris_step_response(pOutput, ramp_samples);
-    // copy ramp up to ramp down (inverse order)
-    for (int i = 0; i < tone_samples; i++)
-        pOutput[tone_samples + ramp_samples - 1 - i] = pOutput[i];
-    // Debug printf
-    //    for (int i = 0; i < length; i++) printf("(%0.2f)", pOutput[i]);
-}
-
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
-
     call_back_data_type *userData;
     MA_ASSERT(pDevice->playback.channels = DEVICE_CHANNELS);
     userData = (call_back_data_type *)pDevice->pUserData;
@@ -66,19 +29,40 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
     float *samples = (float *)pOutput;
     ma_waveform_read_pcm_frames(userData->pWaveForm, pOutput, frameCount, NULL);
 
+    // apply the envolop
     int ce = userData->current_element;
 
     for (int i = 0; i < frameCount; i++)
     {
-        if (userData->memory[0] == 1)
+        // start of element 
+        // check if key memory is set, but no current element
+        if (ce == NONE && userData->memory[DIT] == true)
+        {
+            ce = DIT;
+            userData->current_element = DIT;
+            userData->envelop[ce].playback_position = 0;
+        }
+        else
+        {
+            if (ce == NONE && userData->memory[DAH] == true)
+            {
+                ce = DAH;
+                userData->current_element = DAH;
+                userData->envelop[ce].playback_position = 0;
+            }
+        }
+        if (ce != NONE )
         {
             samples[i] *= userData->envelop[ce].envelop[userData->envelop[ce].playback_position++];
-            if (userData->envelop[ce].playback_position == userData->envelop[ce].length) {
-                userData->memory[0] = 0;
+            if (userData->envelop[ce].playback_position == userData->envelop[ce].length)
+            {
+                userData->memory[ce] = 0;
                 userData->envelop[ce].playback_position = 0;
-            }    
-        } else samples[i] = 0;
-
+                userData->current_element = NONE;
+            }
+        }
+        else
+            samples[i] = 0;
     }
     userData->sample_count += frameCount;
 
@@ -93,6 +77,9 @@ int main(int argc, char **argv)
     ma_waveform_config sineWaveConfig;
     call_back_data_type userData;
 
+
+    userData.memory[DIT] = 0;
+    userData.memory[DAH] = 0;
     open_midi(&userData.memory);
 
     userData.pWaveForm = &sineWave;
@@ -136,7 +123,7 @@ int main(int argc, char **argv)
     userData.envelop[DAH].length = 4 * dit_length;
     userData.envelop[DAH].playback_position = 0;
 
-    userData.current_element = DAH;
+    userData.current_element = NONE;
 
     if (ma_device_start(&device) != MA_SUCCESS)
     {
