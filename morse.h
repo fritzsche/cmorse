@@ -17,8 +17,16 @@ struct envelop_data
     // store playback position
     int playback_position;
 };
-
 typedef struct envelop_data key_envelop_type;
+
+struct key_state
+{
+    // DIT/DAH Memory
+    int memory[2];
+    // State of the key (pressed of not)
+    int state[2];
+};
+typedef struct key_state key_state_type;
 
 struct call_back_data
 {
@@ -28,8 +36,10 @@ struct call_back_data
     int sample_per_dit;
     // number of samples processed
     long long sample_count;
-    // DIT/DAH Memory
-    int memory[2];
+//    // DIT/DAH Memory
+//    int memory[2];
+    // key state and memory
+    key_state_type key;
     // current element
     int current_element;
     // keying shape envelop data

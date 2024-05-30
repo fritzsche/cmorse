@@ -1,4 +1,3 @@
-
 #define MA_NO_DECODING
 #define MA_NO_ENCODING
 #define MINIAUDIO_IMPLEMENTATION
@@ -15,7 +14,7 @@
 
 #define SIN_FREQ 500
 #define SIN_AMP 1
-#define WPM 20
+#define WPM 25
 
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
@@ -36,16 +35,16 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
     {
         // start of element 
         // check if key memory is set, but no current element
-        if (ce == NONE && userData->memory[DIT] == true)
-        {
+        if (ce == NONE && userData->key.memory[DIT] == true)
+        {  // DIT
             ce = DIT;
             userData->current_element = DIT;
             userData->envelop[ce].playback_position = 0;
         }
         else
         {
-            if (ce == NONE && userData->memory[DAH] == true)
-            {
+            if (ce == NONE && userData->key.memory[DAH] == true)
+            { // DAH
                 ce = DAH;
                 userData->current_element = DAH;
                 userData->envelop[ce].playback_position = 0;
@@ -53,12 +52,18 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
         }
         if (ce != NONE )
         {
+            // apply the envelop
             samples[i] *= userData->envelop[ce].envelop[userData->envelop[ce].playback_position++];
+            // check at we at the end of the element
             if (userData->envelop[ce].playback_position == userData->envelop[ce].length)
             {
-                userData->memory[ce] = 0;
+                // if at the end of an element the respectve key is not pressed delete the memory
+                if (userData->key.state[ce] == 0) userData->key.memory[ce] = 0;
+                // reset the payback position of the envolope at end of the element
                 userData->envelop[ce].playback_position = 0;
-                userData->current_element = NONE;
+
+                if (userData->key.memory[!ce]) userData->current_element = !ce;
+                else userData->current_element = NONE;
             }
         }
         else
@@ -78,9 +83,17 @@ int main(int argc, char **argv)
     call_back_data_type userData;
 
 
-    userData.memory[DIT] = 0;
+ /*   userData.memory[DIT] = 0;
     userData.memory[DAH] = 0;
-    open_midi(&userData.memory);
+*/
+    userData.key.memory[DIT] = 0;
+    userData.key.memory[DAH] = 0;
+
+    userData.key.state[DIT] = 0;
+    userData.key.state[DAH] = 0;
+
+
+    open_midi(&userData.key);
 
     userData.pWaveForm = &sineWave;
     userData.sample_count = 0;

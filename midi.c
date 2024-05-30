@@ -20,35 +20,38 @@ OSStatus (*MyMIDIPortConnectSource)(MIDIPortRef port, MIDIEndpointRef source, vo
 int (*MyMIDIGetSource)(ItemCount sourceIndex0);
 ItemCount (*MyMIDIGetNumberOfSources)(void);
 
-
 void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *srcConnRefCon)
 {
     MIDIPacket *packet = (MIDIPacket *)pktlist->packet;
-    int *mem = (int *)readProcRefCon;
+    key_state_type *key = (key_state_type *)readProcRefCon;
     for (UInt32 i = 0; i < pktlist->numPackets; i++)
     {
-        if (packet->length > 2) {             
-            switch(packet->data[0]) {
-                case MIDI_NOTE_ON:
-
-                  if(packet->data[1] == MIDI_DIT) {
-                    printf("PRESS Dit\n");
-                    mem[DIT] = TRUE;
-                  } else {
-                    printf("PRESS Dah\n");
-                    mem[DAH] = TRUE;
-                  }
-                  break;
-                case MIDI_NOTE_OFF:
-                 printf("Release\n");
-                break;      
+        if (packet->length > 2)
+        {
+            switch (packet->data[0])
+            {
+            case MIDI_NOTE_ON:
+                if (packet->data[1] == MIDI_DIT)
+                {
+                    key->memory[DIT] = TRUE;
+                    key->state[DIT] = TRUE;
+                }
+                else
+                {
+                    key->memory[DAH] = TRUE;
+                    key->state[DAH] = TRUE;
+                }
+                break;
+            case MIDI_NOTE_OFF:
+                if (packet->data[1] == MIDI_DIT) key->state[DIT] = 0; else key->state[DAH] = 0;            
+                break;
             }
         }
         packet = MIDIPacketNext(packet);
     }
 }
 
-int open_midi(void* pMemory)
+int open_midi(void *p_key_state)
 {
     printf("Initializing MIDI...\n");
     // dynamic load CoreMidi
@@ -67,7 +70,6 @@ int open_midi(void* pMemory)
     MyMIDIGetNumberOfSources = dlsym(coreMIDI, "MIDIGetNumberOfSources");
     dlclose(coreMIDI);
 
-
     CFStringRef client_name = MyCFStringCreateWithCString(NULL, "MIDI Client", kCFStringEncodingMacRoman);
     CFStringRef port_name = MyCFStringCreateWithCString(NULL, "Input Port", kCFStringEncodingMacRoman);
 
@@ -76,7 +78,7 @@ int open_midi(void* pMemory)
 
     MIDIPortRef inputPort;
 
-    MyMIDIInputPortCreate(client, port_name, MyMIDIReadProc, pMemory, &inputPort);
+    MyMIDIInputPortCreate(client, port_name, MyMIDIReadProc, p_key_state, &inputPort);
     ItemCount numOfSources = MyMIDIGetNumberOfSources();
     if (numOfSources == 0)
     {

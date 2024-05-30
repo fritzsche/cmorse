@@ -21,6 +21,8 @@ int samples_per_ramp(double ramp_time, int sample_rate)
     return 2.7 * ramp_time * sample_rate;
 }
 
+
+
 void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int length)
 {    
     // initialize memory with 0
