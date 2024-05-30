@@ -6,6 +6,10 @@
 #define DIT 0
 #define DAH 1
 #define NONE -1
+
+#define SET 1
+#define UNSET 0
+
 #define RAMP_TIME 0.005
 
 struct envelop_data

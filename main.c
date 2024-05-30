@@ -14,7 +14,7 @@
 
 #define SIN_FREQ 500
 #define SIN_AMP 1
-#define WPM 25
+#define WPM 35
 
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
@@ -35,7 +35,7 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
     {
         // start of element 
         // check if key memory is set, but no current element
-        if (ce == NONE && userData->key.memory[DIT] == true)
+        if (ce == NONE && userData->key.memory[DIT] )
         {  // DIT
             ce = DIT;
             userData->current_element = DIT;
@@ -43,7 +43,7 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
         }
         else
         {
-            if (ce == NONE && userData->key.memory[DAH] == true)
+            if (ce == NONE && userData->key.memory[DAH] )
             { // DAH
                 ce = DAH;
                 userData->current_element = DAH;
@@ -82,10 +82,6 @@ int main(int argc, char **argv)
     ma_waveform_config sineWaveConfig;
     call_back_data_type userData;
 
-
- /*   userData.memory[DIT] = 0;
-    userData.memory[DAH] = 0;
-*/
     userData.key.memory[DIT] = 0;
     userData.key.memory[DAH] = 0;
 
@@ -99,7 +95,7 @@ int main(int argc, char **argv)
     userData.sample_count = 0;
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
-    //    deviceConfig.playback.format = DEVICE_FORMAT; // DEVICE_FORMAT;
+    deviceConfig.playback.format = DEVICE_FORMAT; // DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     deviceConfig.dataCallback = data_callback;
