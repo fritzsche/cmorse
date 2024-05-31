@@ -13,7 +13,7 @@
 
 void update_keyer(int byte0, int byte1, key_state_type *p_key)
 {
-    switch (byte0)
+    switch (byte0 & 0xf0)
     {
     case MIDI_NOTE_ON:
         if (byte1 == MIDI_DIT)
