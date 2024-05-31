@@ -1,5 +1,9 @@
 #include <stdio.h>
-#include <dlfcn.h>
+
+// Only Linux and Mac have library
+#if defined(__linux__) || defined(__APPLE__)
+  #include <dlfcn.h>
+#endif
 
 #include "midi.h"
 #include "morse.h"
@@ -148,9 +152,6 @@ int open_midi(void *p_key_state)
     my_snd_rawmidi_read = dlsym(asound, "snd_rawmidi_read");
 
     pthread_t midiinthread;
-    //   snd_rawmidi_t *midiin = NULL;
-
-    //   asound_param_type midi_parameter;
 
     midi_parameter.p_key = p_key_state;
     midi_parameter.p_midiin = NULL;
