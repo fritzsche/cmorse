@@ -131,7 +131,7 @@ typedef UINT (*midiInGetNumDevs_proc)(void);
 typedef MMRESULT (*midiInOpen_proc)(LPHMIDIIN phmi, UINT uDeviceID, DWORD_PTR dwCallback, DWORD_PTR dwInstance, DWORD fdwOpen);
 typedef MMRESULT (*midiInStart_PROC)(HMIDIIN hmi);
 
-void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD dwParam1, DWORD_PTR dwParam2)
+void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
 {
     key_state_type *p_key = (key_state_type* )dwInstance;
     if (wMsg == MIM_DATA) {      
