@@ -11,6 +11,7 @@
 #define UNSET 0
 
 #define RAMP_TIME 0.005
+#define DECODE_MAX_ELEMENTS 10
 
 struct envelop_data
 {
@@ -40,14 +41,16 @@ struct call_back_data
     int sample_per_dit;
     // number of samples processed
     long long sample_count;
-//    // DIT/DAH Memory
-//    int memory[2];
     // key state and memory
     key_state_type key;
     // current element
     int current_element;
     // keying shape envelop data
     key_envelop_type envelop[2];
+    // decoder buffer
+    char decoder_buffer[DECODE_MAX_ELEMENTS];
+    // decoder pos
+    int decoder_position;
 };
 
 typedef struct call_back_data call_back_data_type;
@@ -55,5 +58,64 @@ void generate_envelope(double *, int, int, int);
 double dit_length_in_sec(int);
 int samples_per_dit(int, int);
 int samples_per_ramp(double, int);
+
+static char *morse_map[][2] = {
+    // alpha
+    { ".-","a" },
+    {"-...","b"},
+    {"-.-.","c"},
+    {"-..", "d"},
+    {".", "e"},
+    {"..-.", "f"},
+    {"--.", "g"},
+    {"....", "h"},
+    {"..", "i"},
+    {".---", "j"},
+    {"-.-", "k"},
+    {".-..", "l"},
+    {"--", "m"},
+    {"-.", "n"},
+    {"---", "o"},
+    {".--.", "p"},
+    {"--.-", "q"},
+    {".-.", "r"},
+    {"...", "s"},
+    {"-", "t"},
+    {"..-", "u"},
+    {"...-", "v"},
+    {".--", "w"},
+    {"-..-", "x"},
+    {"-.--", "y"},
+    {"--..", "z"},
+    // numbers   
+    {".----", "1"},
+    {"..---", "2"},
+    {"...--", "3"},
+    {"....-", "4"},
+    {".....", "5"},
+    {"-....", "6"},
+    {"--...", "7"},
+    {"---..", "8"},
+    {"----.", "9"},
+    {"-----", "0"},
+    // punctuation   
+    {"--..--", ","},
+    {"..--..", "?"},
+    {".-.-.-", "."},
+    {"-...-", "="},
+    {"-..-.", "/"},
+    {"-.-.--", "!"},    
+    // Deutsche Umlaute
+    {".--.-", "ä"},
+    {"---.", "ö"},
+    {"..--", "ü"},
+    {"...--..", "ß"},
+
+    {"-.-.-", "<ka>"}, // Message begins / Start of work 
+    {"...-.-", "<sk>"}, //  End of contact / End of work
+    {".-.-.", "<ar>"}, // End of transmission / End of message
+    {"-.--.", "<kn>"}, // Go ahead, specific named station.    
+    {"........", "<error>"} // Go ahead, specific named station.       
+   };
 
 #endif 
