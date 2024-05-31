@@ -3,6 +3,9 @@
 // Only Linux and Mac have library
 #if defined(__linux__) || defined(__APPLE__)
   #include <dlfcn.h>
+#else // Windows
+  #include <windows.h>
+  #include <mmsystem.h>
 #endif
 
 #include "midi.h"
@@ -122,8 +125,55 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
 
 #endif
 
+#ifdef _WIN64
+//WINMMAPI UINT WINAPI (*my_midiInGetNumDevs)(void);
+typedef UINT (*midiInGetNumDevs_proc)(void);
+typedef MMRESULT (*midiInOpen_proc)(LPHMIDIIN phmi, UINT uDeviceID, DWORD_PTR dwCallback, DWORD_PTR dwInstance, DWORD fdwOpen);
+typedef MMRESULT (*midiInStart_PROC)(HMIDIIN hmi);
+
+void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD dwInstance, DWORD dwParam1, DWORD dwParam2)
+{
+    puts("Callback");
+}
+
+#endif
 int open_midi(void *p_key_state)
 {
+#ifdef _WIN64
+  HMIDIIN hMidiDevice = NULL;;
+  DWORD nMidiPort = 0;
+  UINT nMidiDeviceNum;
+  MMRESULT rv;
+  HMODULE winmm = (ma_handle)LoadLibrary("winmm.dll");
+  if (winmm == NULL) {
+    fprintf(stderr,"Error loading winmm\n");
+    exit(1);
+  }
+  
+  midiInGetNumDevs_proc my_midiInGetNumDevs = (midiInGetNumDevs_proc) GetProcAddress(winmm, "midiInGetNumDevs");
+  midiInOpen_proc my_midiInOpen = (midiInOpen_proc) GetProcAddress(winmm, "midiInOpen");
+  midiInStart_PROC my_midiInStart = (midiInStart_PROC) GetProcAddress(winmm, "midiInStart");
+
+	nMidiDeviceNum = my_midiInGetNumDevs();
+	if (nMidiDeviceNum == 0) {
+		fprintf(stderr, "midiInGetNumDevs() return 0\n");
+		return -1;
+	}
+    printf("Number of midi devices: %i \n",nMidiDeviceNum);
+
+	rv = my_midiInOpen(&hMidiDevice, nMidiPort, (DWORD_PTR)(void*)MidiInProc, 0, CALLBACK_FUNCTION);
+	if (rv != MMSYSERR_NOERROR) {
+		fprintf(stderr, "midiInOpen() failed...rv=%d", rv);
+		return -1;
+	}
+	rv = my_midiInStart(hMidiDevice);
+	if (rv != MMSYSERR_NOERROR) {
+		fprintf(stderr, "midiInStart() failed...rv=%d", rv);
+		return -1;
+	}    
+
+#endif
+
 #if defined(__linux__)
     int status;
     int mode = 0;
