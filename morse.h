@@ -2,6 +2,7 @@
 #define MORSE_H_
 
 #include "miniaudio.h"
+#include <stdatomic.h>
 
 #define DIT 0
 #define DAH 1
@@ -27,9 +28,9 @@ typedef struct envelop_data key_envelop_type;
 struct key_state
 {
     // DIT/DAH Memory
-    int memory[2];
+    atomic_int memory[2];
     // State of the key (pressed of not)
-    int state[2];
+    atomic_int state[2];
 };
 typedef struct key_state key_state_type;
 
