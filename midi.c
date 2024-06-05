@@ -18,20 +18,20 @@ void update_keyer(int byte0, int byte1, key_state_type *p_key)
     case MIDI_NOTE_ON:
         if (byte1 == MIDI_DIT)
         {
-            p_key->memory[DIT] = SET;
-            p_key->state[DIT] = SET;
+            atomic_store(&(p_key->memory[DIT]), SET);
+            atomic_store(&(p_key->state[DIT]), SET);
         }
         else
         {
-            p_key->memory[DAH] = SET;
-            p_key->state[DAH] = SET;
+            atomic_store(&(p_key->memory[DAH]), SET);
+            atomic_store(&(p_key->state[DAH]), SET);
         }
         break;
     case MIDI_NOTE_OFF:
         if (byte1 == MIDI_DIT)
-            p_key->state[DIT] = UNSET;
+            atomic_store(&(p_key->state[DIT]),  UNSET);
         else
-            p_key->state[DAH] = UNSET;
+            atomic_store(&(p_key->state[DAH]),  UNSET);
         break;
     }
 }
@@ -126,7 +126,6 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
 #endif
 
 #ifdef _WIN64
-//WINMMAPI UINT WINAPI (*my_midiInGetNumDevs)(void);
 typedef UINT (*midiInGetNumDevs_proc)(void);
 typedef MMRESULT (*midiInOpen_proc)(LPHMIDIIN phmi, UINT uDeviceID, DWORD_PTR dwCallback, DWORD_PTR dwInstance, DWORD fdwOpen);
 typedef MMRESULT (*midiInStart_PROC)(HMIDIIN hmi);
@@ -134,18 +133,16 @@ typedef MMRESULT (*midiInStart_PROC)(HMIDIIN hmi);
 void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
 {
     key_state_type *p_key = (key_state_type* )dwInstance;
-    if (wMsg == MIM_DATA) {      
-//      printf("wMsg=MIM_DATA, dwInstance=%08x, dwParam1=%08x, dwParam2=%08x\n", dwInstance, dwParam1 , dwParam2);
+    if (wMsg == MIM_DATA) {
       update_keyer(dwParam1 & 0xf0,dwParam1>>8 & 0xff,p_key);
-    }
-    
+    }    
 }
 
 #endif
 int open_midi(void *p_key_state)
 {
 #ifdef _WIN64
-  HMIDIIN hMidiDevice = NULL;;
+  HMIDIIN hMidiDevice = NULL;
   DWORD nMidiPort = 0;
   UINT nMidiDeviceNum;
   MMRESULT rv;

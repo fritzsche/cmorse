@@ -16,23 +16,21 @@
 #define SIN_AMP 0.8
 #define WPM 25
 
-
-int compare_sort( const void *arg1, const void *arg2 )
+int compare_sort(const void *arg1, const void *arg2)
 {
-   const char *a = *(char **) arg1;
-   const char *b = *(char **) arg2;
-   /* Compare all of both strings: */
-   return strcmp( &a[0] ,&b[0]);
+    const char *a = *(char **)arg1;
+    const char *b = *(char **)arg2;
+    /* Compare all of both strings: */
+    return strcmp(&a[0], &b[0]);
 }
 
-int compare_search( const void *key, const void *element )
+int compare_search(const void *key, const void *element)
 {
-   const char *a = (char *) key;
-   const char *b = *(char **) element;
-   /* Compare all of both strings: */
-   return strcmp( a ,&b[0]);
+    const char *a = (char *)key;
+    const char *b = *(char **)element;
+    /* Compare all of both strings: */
+    return strcmp(a, &b[0]);
 }
-
 
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
@@ -51,24 +49,24 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
 
     for (int i = 0; i < frameCount; i++)
     {
-        // start of element 
+        // start of element
         // check if key memory is set, but no current element
-        if (ce == NONE && userData->key.memory[DIT] )
-        {  // DIT
+        if (ce == NONE && atomic_load(&(userData->key.memory[DIT])))
+        { // DIT
             ce = DIT;
             userData->current_element = DIT;
             userData->envelop[ce].playback_position = 0;
         }
         else
         {
-            if (ce == NONE && userData->key.memory[DAH] )
+            if (ce == NONE && atomic_load(&(userData->key.memory[DAH])))
             { // DAH
                 ce = DAH;
                 userData->current_element = DAH;
                 userData->envelop[ce].playback_position = 0;
             }
         }
-        if (ce != NONE )
+        if (ce != NONE)
         {
             // apply the envelop
             samples[i] *= userData->envelop[ce].envelop[userData->envelop[ce].playback_position++];
@@ -76,33 +74,43 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
             if (userData->envelop[ce].playback_position == userData->envelop[ce].length)
             {
                 // check if we already have too many elements for decode and reset
-                if (userData->decoder_position == DECODE_MAX_ELEMENTS -1) {
+                if (userData->decoder_position == DECODE_MAX_ELEMENTS - 1)
+                {
                     printf("*");
                     userData->decoder_position = 0;
-                    memset(userData->decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS );
+                    memset(userData->decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS);
                 }
-                if (userData->current_element == DIT) userData->decoder_buffer[userData->decoder_position++] = '.';
-                  else userData->decoder_buffer[userData->decoder_position++] = '-';
+                if (userData->current_element == DIT)
+                    userData->decoder_buffer[userData->decoder_position++] = '.';
+                else
+                    userData->decoder_buffer[userData->decoder_position++] = '-';
                 // reset the payback position of the envolope at end of the element
                 userData->envelop[ce].playback_position = 0;
                 // if at the end of an element the respectve key is not pressed: delete the memory
-                if (!userData->key.state[ce]) userData->key.memory[ce] = 0;
+                if (!atomic_load(&(userData->key.state[ce])))
+                    atomic_store(&(userData->key.memory[ce]), 0);
                 // play the opposite element is the opposite memory is set
-                if (userData->key.memory[!ce]) userData->current_element = !ce;
-                else {
+                if (atomic_load(&(userData->key.memory[!ce])))
+                    atomic_store(&(userData->current_element),  !ce);
+                else
+                {
                     // check if memory of current element is still set
                     // if not set we are at the end of a character and stop playing elements
-                    if (!userData->key.memory[ce]) { 
+                    if (!atomic_load(&(userData->key.memory[ce])))
+                    {
                         userData->current_element = NONE;
-                        size_t n = sizeof(morse_map)/sizeof(morse_map[0]);
-                        char **result = (char **)bsearch( userData->decoder_buffer, &morse_map, n,
-                              sizeof(char*[2]), compare_search );
-                        if (result == NULL) printf("*"); else printf("%s", result[1]);   
+                        size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
+                        char **result = (char **)bsearch(userData->decoder_buffer, &morse_map, n,
+                                                         sizeof(char *[2]), compare_search);
+                        if (result == NULL)
+                            printf("*");
+                        else
+                            printf("%s", result[1]);
                         fflush(stdout);
                         userData->decoder_position = 0;
-                        memset(userData->decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS );
+                        memset(userData->decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS);
                     }
-                }    
+                }
             }
         }
         else
@@ -113,8 +121,6 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
     (void)pInput; /* Unused. */
 }
 
-
-
 int main(int argc, char **argv)
 {
     ma_waveform sineWave;
@@ -122,25 +128,36 @@ int main(int argc, char **argv)
     ma_device device;
     ma_waveform_config sineWaveConfig;
     call_back_data_type userData;
-     
+
+    // check if atomic int is lock free, that should be the case on all
+    // major plattform (Intel/Arm etc.)
+    // This can be just on a variable/instance
+    atomic_int test_lock_free;
+    if (!atomic_is_lock_free(&test_lock_free))
+    {
+        fprintf(stderr, "ERR: int is not a atomic type on this plattfrom.");
+        return (-1);
+    }
+
     // sort the morse code map to run binary search later
-    size_t n = sizeof(morse_map)/sizeof(morse_map[0]);
-    qsort(&morse_map,n,sizeof(char*[2]),compare_sort);
+    size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
+    qsort(&morse_map, n, sizeof(char *[2]), compare_sort);
 
+    char **result = (char **)bsearch("-.-.", &morse_map, n,
+                                     sizeof(char *[2]), compare_search);
+    if (result == NULL)
+        puts("not found");
+    else
+        printf("Result: (%s)\n", result[1]);
 
-    char **result = (char **)bsearch( "-.-.", &morse_map, n,
-                              sizeof(char*[2]), compare_search );
-    if (result == NULL) puts("not found"); else printf("Result: (%s)\n", result[1]);                              
-    
     userData.decoder_position = 0;
-    memset(userData.decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS );
+    memset(userData.decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS);
 
-    userData.key.memory[DIT] = 0;
-    userData.key.memory[DAH] = 0;
+    atomic_store(&(userData.key.memory[DIT]), 0);
+    atomic_store(&(userData.key.memory[DAH]), 0);
 
-    userData.key.state[DIT] = 0;
-    userData.key.state[DAH] = 0;
-
+    atomic_store(&(userData.key.state[DIT]), 0);
+    atomic_store(&(userData.key.state[DAH]), 0);
 
     open_midi(&userData.key);
 
