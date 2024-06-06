@@ -7,14 +7,21 @@
 #include "blackman.h"
 #include "midi.h"
 
+#include <pthread.h>
+#ifdef _WIN64
+#include <windows.h>
+#endif
+
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
 #define DEVICE_SAMPLE_RATE 48000
-#define DEVICE_FRAMES 64
+#define DEVICE_FRAMES 32
 
 #define SIN_FREQ 500
 #define SIN_AMP 0.8
 #define WPM 25
+
+#define RING_BUFFER_SIZE 1024
 
 int compare_sort(const void *arg1, const void *arg2)
 {
@@ -30,6 +37,25 @@ int compare_search(const void *key, const void *element)
     const char *b = *(char **)element;
     /* Compare all of both strings: */
     return strcmp(a, &b[0]);
+}
+
+void *decoder_pthreads(void *parm)
+{
+    ma_rb *p_rb;
+    p_rb = (ma_rb *)parm;
+    for (;;)
+    {
+        void *read_pointer;
+        size_t number = 1;
+        ma_rb_acquire_read(p_rb, &number, &read_pointer);
+        if (number == 1) {
+          printf("%c",*((char *)read_pointer));
+          ma_rb_commit_read(p_rb,1);
+
+        }
+   //     puts("thread going to sleep");
+        Sleep(50);
+    }
 }
 
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
@@ -91,7 +117,7 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
                     atomic_store(&(userData->key.memory[ce]), 0);
                 // play the opposite element is the opposite memory is set
                 if (atomic_load(&(userData->key.memory[!ce])))
-                    atomic_store(&(userData->current_element),  !ce);
+                    atomic_store(&(userData->current_element), !ce);
                 else
                 {
                     // check if memory of current element is still set
@@ -104,8 +130,17 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
                                                          sizeof(char *[2]), compare_search);
                         if (result == NULL)
                             printf("*");
-                        else
-                            printf("%s", result[1]);
+                        else {
+                       //     printf("*%s*", result[1]);
+                            void *p_write = NULL;
+                            size_t number = 1;
+                            ma_rb_acquire_write(userData->pDecoderRb,&number,&p_write);
+                            MA_ASSERT(number == 1);
+                            char c = *result[1];
+                            ((char *)p_write)[0] = c;
+                            ma_rb_commit_write(userData->pDecoderRb,number);
+                        }
+                            
                         fflush(stdout);
                         userData->decoder_position = 0;
                         memset(userData->decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS);
@@ -127,6 +162,8 @@ int main(int argc, char **argv)
     ma_device_config deviceConfig;
     ma_device device;
     ma_waveform_config sineWaveConfig;
+    ma_rb ring_buffer;
+
     call_back_data_type userData;
 
     // check if atomic int is lock free, that should be the case on all
@@ -162,6 +199,7 @@ int main(int argc, char **argv)
     open_midi(&userData.key);
 
     userData.pWaveForm = &sineWave;
+    userData.pDecoderRb = &ring_buffer;
     userData.sample_count = 0;
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
@@ -201,8 +239,21 @@ int main(int argc, char **argv)
     userData.envelop[DAH].envelop = pDahEnvelop;
     userData.envelop[DAH].length = 4 * dit_length;
     userData.envelop[DAH].playback_position = 0;
-
     userData.current_element = NONE;
+
+    if (ma_rb_init(RING_BUFFER_SIZE, NULL, NULL, userData.pDecoderRb) != MA_SUCCESS)
+    {
+        fprintf(stderr, "Failed to initialize ring buffer");
+        return -1;
+    }
+
+    pthread_t thid;
+
+    if (pthread_create(&thid, NULL, decoder_pthreads, userData.pDecoderRb) != 0)
+    {
+        perror("pthread_create() error");
+        exit(1);
+    }
 
     if (ma_device_start(&device) != MA_SUCCESS)
     {

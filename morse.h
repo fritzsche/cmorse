@@ -52,6 +52,8 @@ struct call_back_data
     char decoder_buffer[DECODE_MAX_ELEMENTS];
     // decoder pos
     int decoder_position;
+
+    ma_rb *pDecoderRb;
 };
 
 typedef struct call_back_data call_back_data_type;
