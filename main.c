@@ -121,7 +121,7 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
                     atomic_store(&(userData->key.memory[ce]), 0);
                 // play the opposite element is the opposite memory is set
                 if (atomic_load(&(userData->key.memory[!ce])))
-                    atomic_store(&(userData->current_element), !ce);
+                    userData->current_element = !ce;
                 else
                 {
                     // check if memory of current element is still set
