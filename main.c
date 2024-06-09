@@ -12,6 +12,9 @@
 #include <windows.h>
 #endif
 
+// #include <unistd.h>    /* for getopt */
+#include <getopt.h>
+
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
 #define DEVICE_SAMPLE_RATE 48000
@@ -214,16 +217,24 @@ int main(int argc, char **argv)
         return (-1);
     }
 
-    // sort the morse code map to run binary search later
-    size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
-    qsort(&morse_map, n, sizeof(char *[2]), compare_sort);
+    // Testing getopt_long
+    int c;
+    int digit_optind = 0;
+    int option_index = 0;
+    static struct option long_options[] = {
+        /*   NAME       ARGUMENT           FLAG  SHORTNAME */
+        {"add", required_argument, NULL, 0},
+        {"append", no_argument, NULL, 0},
+        {"delete", required_argument, NULL, 0},
+        {"verbose", no_argument, NULL, 0},
+        {"create", required_argument, NULL, 'c'},
+        {"file", required_argument, NULL, 0},
+        {NULL, 0, NULL, 0}};
+    while ((c = getopt_long(argc, argv, "abc:d:012",
+                            long_options, &option_index)) != -1)
+    {
+    }
 
-    char **result = (char **)bsearch("-.-.", &morse_map, n,
-                                     sizeof(char *[2]), compare_search);
-    if (result == NULL)
-        puts("not found");
-    else
-        printf("Result: (%s)\n", result[1]);
 
     atomic_store(&(userData.key.memory[DIT]), 0);
     atomic_store(&(userData.key.memory[DAH]), 0);
