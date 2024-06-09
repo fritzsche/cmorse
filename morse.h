@@ -13,6 +13,8 @@
 
 #define RAMP_TIME 0.005
 #define DECODE_MAX_ELEMENTS 10
+#define DECODER_END_OF_CHAR '*'
+#define DECODER_SPACE_CHAR ' '
 
 struct envelop_data
 {
@@ -48,11 +50,14 @@ struct call_back_data
     int current_element;
     // keying shape envelop data
     key_envelop_type envelop[2];
+    // frame the last element end
+    long long last_end;
+/*
     // decoder buffer
     char decoder_buffer[DECODE_MAX_ELEMENTS];
     // decoder pos
     int decoder_position;
-
+*/
     ma_rb *pDecoderRb;
 };
 

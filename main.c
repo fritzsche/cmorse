@@ -39,27 +39,82 @@ int compare_search(const void *key, const void *element)
     return strcmp(a, &b[0]);
 }
 
+void convert_and_print_morse(char *dit_dah)
+{
+    size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
+    char **result = (char **)bsearch(dit_dah, &morse_map, n,
+                                     sizeof(char *[2]), compare_search);
+    if (result == NULL)
+        printf("*");
+    else
+        printf("%s", result[1]);
+    fflush(stdout);
+}
+
 void *decoder_pthreads(void *parm)
 {
     ma_rb *p_rb;
+
+    char decode_buffer[DECODE_MAX_ELEMENTS];
+    int curr_pos = 0;
+
     p_rb = (ma_rb *)parm;
     for (;;)
     {
         void *read_pointer;
         size_t number = 1;
         ma_rb_acquire_read(p_rb, &number, &read_pointer);
-        if (number == 1) {
-          printf("%c",*((char *)read_pointer));
-          ma_rb_commit_read(p_rb,1);
+        if (number == 1) // we found a character
+        {
+            char c = *((char *)read_pointer);
+            switch (c)
+            {
+            case DECODER_SPACE_CHAR:
+                printf(" ");
+                fflush(stdout);
+                curr_pos = 0;
+                break;
+            case DECODER_END_OF_CHAR:
+                decode_buffer[curr_pos] = 0;
+                convert_and_print_morse(decode_buffer);
+                fflush(stdout);
+                curr_pos = 0;
+                break;
 
+            default:
+                if (curr_pos == DECODE_MAX_ELEMENTS - 1)
+                {
+                    curr_pos = 0;
+                    printf("*");
+                    fflush(stdout);
+                }
+                else
+                    decode_buffer[curr_pos++] = c;
+                break;
+            }
+            ma_rb_commit_read(p_rb, 1);
         }
-   //     puts("thread going to sleep");
-#ifdef _WIN64   
-        Sleep(50);
+        else // no character in the buffer wait for short period of time
+        {
+#ifdef _WIN64
+            Sleep(50);
 #else
-        usleep(50000);
-#endif        
+            usleep(50000);
+#endif
+        }
     }
+}
+
+// write a character to non-blocking ring buffer
+extern inline void non_block_write(ma_rb *rb, char c)
+{
+    void *p_write = NULL;
+    size_t number = 1;
+    ma_rb_acquire_write(rb, &number, &p_write);
+    MA_ASSERT(number == 1);
+    //   char c = *result[1];
+    ((char *)p_write)[0] = c;
+    ma_rb_commit_write(rb, number);
 }
 
 void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
@@ -76,13 +131,14 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
 
     // apply the envolop
     int ce = userData->current_element;
-
     for (int i = 0; i < frameCount; i++)
     {
-        // start of element
+        // Check if a new element started:
         // check if key memory is set, but no current element
         if (ce == NONE && atomic_load(&(userData->key.memory[DIT])))
         { // DIT
+            if (userData->last_end && userData->sample_count - userData->last_end > 7 * userData->sample_per_dit)
+                non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
             ce = DIT;
             userData->current_element = DIT;
             userData->envelop[ce].playback_position = 0;
@@ -91,6 +147,8 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
         {
             if (ce == NONE && atomic_load(&(userData->key.memory[DAH])))
             { // DAH
+                if (userData->last_end && userData->sample_count - userData->last_end > 7 * userData->sample_per_dit)
+                    non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
                 ce = DAH;
                 userData->current_element = DAH;
                 userData->envelop[ce].playback_position = 0;
@@ -98,22 +156,15 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
         }
         if (ce != NONE)
         {
-            // apply the envelop
+            // apply the envelop to the sample
             samples[i] *= userData->envelop[ce].envelop[userData->envelop[ce].playback_position++];
             // check at we at the end of the element
             if (userData->envelop[ce].playback_position == userData->envelop[ce].length)
             {
-                // check if we already have too many elements for decode and reset
-                if (userData->decoder_position == DECODE_MAX_ELEMENTS - 1)
-                {
-                    printf("*");
-                    userData->decoder_position = 0;
-                    memset(userData->decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS);
-                }
                 if (userData->current_element == DIT)
-                    userData->decoder_buffer[userData->decoder_position++] = '.';
+                    non_block_write(userData->pDecoderRb, '.');
                 else
-                    userData->decoder_buffer[userData->decoder_position++] = '-';
+                    non_block_write(userData->pDecoderRb, '-');
                 // reset the payback position of the envolope at end of the element
                 userData->envelop[ce].playback_position = 0;
                 // if at the end of an element the respectve key is not pressed: delete the memory
@@ -129,34 +180,17 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
                     if (!atomic_load(&(userData->key.memory[ce])))
                     {
                         userData->current_element = NONE;
-                        size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
-                        char **result = (char **)bsearch(userData->decoder_buffer, &morse_map, n,
-                                                         sizeof(char *[2]), compare_search);
-                        if (result == NULL)
-                            printf("*");
-                        else {
-                       //     printf("*%s*", result[1]);
-                            void *p_write = NULL;
-                            size_t number = 1;
-                            ma_rb_acquire_write(userData->pDecoderRb,&number,&p_write);
-                            MA_ASSERT(number == 1);
-                            char c = *result[1];
-                            ((char *)p_write)[0] = c;
-                            ma_rb_commit_write(userData->pDecoderRb,number);
-                        }
-                            
-                        fflush(stdout);
-                        userData->decoder_position = 0;
-                        memset(userData->decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS);
+                        // store the table we finished the character
+                        userData->last_end = userData->sample_count;
+                        non_block_write(userData->pDecoderRb, DECODER_END_OF_CHAR);
                     }
                 }
             }
         }
         else
             samples[i] = 0;
+        userData->sample_count++;
     }
-    userData->sample_count += frameCount;
-
     (void)pInput; /* Unused. */
 }
 
@@ -190,9 +224,6 @@ int main(int argc, char **argv)
         puts("not found");
     else
         printf("Result: (%s)\n", result[1]);
-
-    userData.decoder_position = 0;
-    memset(userData.decoder_buffer, 0, sizeof(char) * DECODE_MAX_ELEMENTS);
 
     atomic_store(&(userData.key.memory[DIT]), 0);
     atomic_store(&(userData.key.memory[DAH]), 0);
@@ -244,6 +275,7 @@ int main(int argc, char **argv)
     userData.envelop[DAH].length = 4 * dit_length;
     userData.envelop[DAH].playback_position = 0;
     userData.current_element = NONE;
+    userData.last_end = 0;
 
     if (ma_rb_init(RING_BUFFER_SIZE, NULL, NULL, userData.pDecoderRb) != MA_SUCCESS)
     {
