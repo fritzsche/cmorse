@@ -54,7 +54,11 @@ void *decoder_pthreads(void *parm)
 
         }
    //     puts("thread going to sleep");
+#ifdef _WIN64   
         Sleep(50);
+#else
+        usleep(50000);
+#endif        
     }
 }
 
