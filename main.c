@@ -225,20 +225,32 @@ int main(int argc, char **argv)
     int c;
     int digit_optind = 0;
     int option_index = 0;
+    
+    int wpm = WPM;
+    int frequency = SIN_FREQ;
+
     static struct option long_options[] = {
         /*   NAME       ARGUMENT           FLAG  SHORTNAME */
-        {"add", required_argument, NULL, 0},
-        {"append", no_argument, NULL, 0},
-        {"delete", required_argument, NULL, 0},
-        {"verbose", no_argument, NULL, 0},
-        {"create", required_argument, NULL, 'c'},
-        {"file", required_argument, NULL, 0},
+        {"wpm", required_argument, NULL, 'w'},
+        {"frequency", required_argument, NULL, 'f'},
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "abc:d:012",
+    while ((c = getopt_long(argc, argv, "w:f:", // abc:d:012
                             long_options, &option_index)) != -1)
     {
+        switch (c)
+        {
+        case 'w':
+            printf("option w with value '%s'\n", optarg);
+            wpm = atoi(optarg);
+            break;
+        case 'f':
+            printf("option f with value '%s'\n", optarg);
+            frequency = atoi(optarg);
+            break;            
+        case '?':
+            break;
+        }
     }
-
 
     atomic_store(&(userData.key.memory[DIT]), 0);
     atomic_store(&(userData.key.memory[DAH]), 0);
@@ -267,14 +279,14 @@ int main(int argc, char **argv)
     }
     printf("Device Name: %s\n", device.playback.name);
 
-    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, SIN_FREQ);
+    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, frequency);
     printf("Sample rate: %d   Channels: %d\n", device.sampleRate, device.playback.channels);
-    userData.sample_per_dit = samples_per_dit(WPM, device.sampleRate);
+    userData.sample_per_dit = samples_per_dit(wpm, device.sampleRate);
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
     // setup dit and dah key envolop shapes
     int ramp_samples = samples_per_ramp(RAMP_TIME, device.sampleRate);
-    int dit_length = samples_per_dit(WPM, device.sampleRate);
+    int dit_length = samples_per_dit(wpm, device.sampleRate);
 
     double *pDitEnvelop = malloc(2 * dit_length * sizeof(double));
     generate_envelope(pDitEnvelop, dit_length, ramp_samples, 2 * dit_length);
