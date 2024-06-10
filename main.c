@@ -217,6 +217,10 @@ int main(int argc, char **argv)
         return (-1);
     }
 
+    // sort the morse code map to run binary search later
+    size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
+    qsort(&morse_map, n, sizeof(char *[2]), compare_sort);
+
     // Testing getopt_long
     int c;
     int digit_optind = 0;
