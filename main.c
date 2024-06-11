@@ -15,6 +15,8 @@
 // #include <unistd.h>    /* for getopt */
 #include <getopt.h>
 
+#define VERSION "0.1"
+
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
 #define DEVICE_SAMPLE_RATE 48000
@@ -207,6 +209,8 @@ int main(int argc, char **argv)
 
     call_back_data_type userData;
 
+    printf("cmorse %s - (c) 2024 by Thomas Fritzsche, DJ1TF\n\n", VERSION);
+
     // check if atomic int is lock free, that should be the case on all
     // major plattform (Intel/Arm etc.)
     // This can be just on a variable/instance
@@ -225,7 +229,8 @@ int main(int argc, char **argv)
     int c;
     int digit_optind = 0;
     int option_index = 0;
-    
+
+    int frames_per_pack = DEVICE_FRAMES;
     int wpm = WPM;
     int frequency = SIN_FREQ;
 
@@ -233,20 +238,22 @@ int main(int argc, char **argv)
         /*   NAME       ARGUMENT           FLAG  SHORTNAME */
         {"wpm", required_argument, NULL, 'w'},
         {"frequency", required_argument, NULL, 'f'},
+        {"package", required_argument, NULL, 'p'},
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:", // abc:d:012
+    while ((c = getopt_long(argc, argv, "w:f:p:", // abc:d:012
                             long_options, &option_index)) != -1)
     {
         switch (c)
         {
         case 'w':
-            printf("option w with value '%s'\n", optarg);
             wpm = atoi(optarg);
             break;
         case 'f':
-            printf("option f with value '%s'\n", optarg);
             frequency = atoi(optarg);
-            break;            
+            break;
+        case 'p':
+            frames_per_pack = atoi(optarg);
+            break;
         case '?':
             break;
         }
@@ -270,7 +277,7 @@ int main(int argc, char **argv)
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     deviceConfig.dataCallback = data_callback;
     deviceConfig.pUserData = &userData;
-    deviceConfig.periodSizeInFrames = DEVICE_FRAMES;
+    deviceConfig.periodSizeInFrames = frames_per_pack;
 
     if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS)
     {
