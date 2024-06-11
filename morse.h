@@ -67,6 +67,9 @@ double dit_length_in_sec(int);
 int samples_per_dit(int, int);
 int samples_per_ramp(double, int);
 
+void convert_and_print_morse(char *dit_dah);
+void init_morse_map();
+
 static char *morse_map[][2] = {
     // alpha
     { ".-","a" },

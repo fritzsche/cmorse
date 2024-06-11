@@ -28,33 +28,6 @@
 
 #define RING_BUFFER_SIZE 1024
 
-int compare_sort(const void *arg1, const void *arg2)
-{
-    const char *a = *(char **)arg1;
-    const char *b = *(char **)arg2;
-    /* Compare all of both strings: */
-    return strcmp(&a[0], &b[0]);
-}
-
-int compare_search(const void *key, const void *element)
-{
-    const char *a = (char *)key;
-    const char *b = *(char **)element;
-    /* Compare all of both strings: */
-    return strcmp(a, &b[0]);
-}
-
-void convert_and_print_morse(char *dit_dah)
-{
-    size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
-    char **result = (char **)bsearch(dit_dah, &morse_map, n,
-                                     sizeof(char *[2]), compare_search);
-    if (result == NULL)
-        printf("*");
-    else
-        printf("%s", result[1]);
-    fflush(stdout);
-}
 
 void *decoder_pthreads(void *parm)
 {
@@ -221,11 +194,8 @@ int main(int argc, char **argv)
         return (-1);
     }
 
-    // sort the morse code map to run binary search later
-    size_t n = sizeof(morse_map) / sizeof(morse_map[0]);
-    qsort(&morse_map, n, sizeof(char *[2]), compare_sort);
-
-    // Testing getopt_long
+    init_morse_map();
+    // Parameter option
     int c;
     int digit_optind = 0;
     int option_index = 0;
