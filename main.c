@@ -18,7 +18,7 @@
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
 #define DEVICE_SAMPLE_RATE 48000
-#define DEVICE_FRAMES 32
+#define DEVICE_FRAMES 64
 
 #define SIN_FREQ 500
 #define SIN_AMP 0.8
