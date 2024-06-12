@@ -20,7 +20,7 @@
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
 #define DEVICE_SAMPLE_RATE 48000
-#define DEVICE_FRAMES 64
+#define DEVICE_FRAMES 128
 
 #define SIN_FREQ 500
 #define SIN_AMP 0.8
@@ -172,6 +172,23 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
     (void)pInput; /* Unused. */
 }
 
+void help(){
+    printf("cmorse [-w wpm] [-f frequency] [-p frames per package] [-h]\n\n");
+    printf("   -w wpm --wpm wpm\n");
+    printf("       Specify the speed of the keyer in words per minute(wpm).\n");
+    printf("       The default speed is %dwpm.\n\n",WPM);
+    printf("   -f frequency --frequency frequency\n");
+    printf("       Set the sidetone frequency in Hertz.\n");   
+    printf("       The default frequency of the sidetone is %dHz.\n\n",SIN_FREQ);     
+    printf("   -p frames --package frames\n");
+    printf("       Specify the number of number of frames that is processed at\n");
+    printf("       once by the audio subsystem. Typical values are 32,64 or 128 frames\n");
+    printf("       The smaller the number of frames the lower the latency.\n");
+    printf("       Default value for the number of frames is %d frames.\n\n",DEVICE_FRAMES);    
+    printf("   -h\n");
+    printf("       Print this help text.\n\n\n");
+}
+
 int main(int argc, char **argv)
 {
     ma_waveform sineWave;
@@ -209,8 +226,9 @@ int main(int argc, char **argv)
         {"wpm", required_argument, NULL, 'w'},
         {"frequency", required_argument, NULL, 'f'},
         {"package", required_argument, NULL, 'p'},
+        {"help", no_argument, NULL, 'h'},        
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:", // abc:d:012
+    while ((c = getopt_long(argc, argv, "w:f:p:h", // abc:d:012
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -224,6 +242,10 @@ int main(int argc, char **argv)
         case 'p':
             frames_per_pack = atoi(optarg);
             break;
+        case 'h':
+            help();
+            return(-1);
+            break;            
         case '?':
             break;
         }
