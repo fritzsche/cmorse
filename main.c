@@ -24,10 +24,18 @@
 
 #define SIN_FREQ 500
 #define SIN_AMP 0.8
-#define WPM 25
+#define DEFAULT_WPM 25
 
 #define RING_BUFFER_SIZE 1024
 
+void ms_sleep(int ms)
+{
+#ifdef _WIN64
+    Sleep(ms);
+#else
+    usleep(ms * 1000);
+#endif
+}
 
 void *decoder_pthreads(void *parm)
 {
@@ -72,14 +80,7 @@ void *decoder_pthreads(void *parm)
             }
             ma_rb_commit_read(p_rb, 1);
         }
-        else // no character in the buffer wait for short period of time
-        {
-#ifdef _WIN64
-            Sleep(50);
-#else
-            usleep(50000);
-#endif
-        }
+        else ms_sleep(50);// no character in the buffer wait for short period of time        
     }
 }
 
@@ -90,7 +91,6 @@ extern inline void non_block_write(ma_rb *rb, char c)
     size_t number = 1;
     ma_rb_acquire_write(rb, &number, &p_write);
     MA_ASSERT(number == 1);
-    //   char c = *result[1];
     ((char *)p_write)[0] = c;
     ma_rb_commit_write(rb, number);
 }
@@ -115,7 +115,7 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
         // check if key memory is set, but no current element
         if (ce == NONE && atomic_load(&(userData->key.memory[DIT])))
         { // DIT
-            if (userData->last_end && userData->sample_count - userData->last_end > 7 * userData->sample_per_dit)
+            if (userData->last_element_end_frame && userData->sample_count - userData->last_element_end_frame > 7 * userData->sample_per_dit)
                 non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
             ce = DIT;
             userData->current_element = DIT;
@@ -125,7 +125,7 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
         {
             if (ce == NONE && atomic_load(&(userData->key.memory[DAH])))
             { // DAH
-                if (userData->last_end && userData->sample_count - userData->last_end > 7 * userData->sample_per_dit)
+                if (userData->last_element_end_frame && userData->sample_count - userData->last_element_end_frame > 7 * userData->sample_per_dit)
                     non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
                 ce = DAH;
                 userData->current_element = DAH;
@@ -159,7 +159,7 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
                     {
                         userData->current_element = NONE;
                         // store the table we finished the character
-                        userData->last_end = userData->sample_count;
+                        userData->last_element_end_frame = userData->sample_count;
                         non_block_write(userData->pDecoderRb, DECODER_END_OF_CHAR);
                     }
                 }
@@ -172,19 +172,20 @@ void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uin
     (void)pInput; /* Unused. */
 }
 
-void help(){
+void help()
+{
     printf("cmorse [-w wpm] [-f frequency] [-p frames per package] [-h]\n\n");
     printf("   -w wpm --wpm wpm\n");
     printf("       Specify the speed of the keyer in words per minute(wpm).\n");
-    printf("       The default speed is %dwpm.\n\n",WPM);
+    printf("       The default speed is %dwpm.\n\n", DEFAULT_WPM);
     printf("   -f frequency --frequency frequency\n");
-    printf("       Set the sidetone frequency in Hertz.\n");   
-    printf("       The default frequency of the sidetone is %dHz.\n\n",SIN_FREQ);     
+    printf("       Set the sidetone frequency in Hertz.\n");
+    printf("       The default frequency of the sidetone is %dHz.\n\n", SIN_FREQ);
     printf("   -p frames --package frames\n");
     printf("       Specify the number of number of frames that is processed at\n");
     printf("       once by the audio subsystem. Typical values are 32,64 or 128 frames\n");
     printf("       The smaller the number of frames the lower the latency.\n");
-    printf("       Default value for the number of frames is %d frames.\n\n",DEVICE_FRAMES);    
+    printf("       Default value for the number of frames is %d frames.\n\n", DEVICE_FRAMES);
     printf("   -h\n");
     printf("       Print this help text.\n\n\n");
 }
@@ -218,7 +219,7 @@ int main(int argc, char **argv)
     int option_index = 0;
 
     int frames_per_pack = DEVICE_FRAMES;
-    int wpm = WPM;
+    int wpm = DEFAULT_WPM;
     int frequency = SIN_FREQ;
 
     static struct option long_options[] = {
@@ -226,7 +227,7 @@ int main(int argc, char **argv)
         {"wpm", required_argument, NULL, 'w'},
         {"frequency", required_argument, NULL, 'f'},
         {"package", required_argument, NULL, 'p'},
-        {"help", no_argument, NULL, 'h'},        
+        {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0}};
     while ((c = getopt_long(argc, argv, "w:f:p:h", // abc:d:012
                             long_options, &option_index)) != -1)
@@ -244,8 +245,8 @@ int main(int argc, char **argv)
             break;
         case 'h':
             help();
-            return(-1);
-            break;            
+            return (-1);
+            break;
         case '?':
             break;
         }
@@ -304,7 +305,7 @@ int main(int argc, char **argv)
     userData.envelop[DAH].length = 4 * dit_length;
     userData.envelop[DAH].playback_position = 0;
     userData.current_element = NONE;
-    userData.last_end = 0;
+    userData.last_element_end_frame = 0;
 
     if (ma_rb_init(RING_BUFFER_SIZE, NULL, NULL, userData.pDecoderRb) != MA_SUCCESS)
     {
@@ -327,7 +328,7 @@ int main(int argc, char **argv)
         return -5;
     }
 
-    printf("\nPress Enter to quit...");
+    printf("\nPress Enter to quit...\n");
     getchar();
 
     printf("\nNumber of Samples: %lli\n", userData.sample_count);

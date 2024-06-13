@@ -16,7 +16,7 @@
 #define DECODER_END_OF_CHAR '*'
 #define DECODER_SPACE_CHAR ' '
 
-struct envelop_data
+typedef struct envelop_data
 {
     // envelop -1,...,+1
     double *envelop;
@@ -24,19 +24,17 @@ struct envelop_data
     int length;
     // store playback position
     int playback_position;
-};
-typedef struct envelop_data key_envelop_type;
+}  key_envelop_type;
 
-struct key_state
+typedef struct key_state
 {
     // DIT/DAH Memory
     atomic_int memory[2];
     // State of the key (pressed of not)
     atomic_int state[2];
-};
-typedef struct key_state key_state_type;
+} key_state_type;
 
-struct call_back_data
+typedef struct call_back_data
 {
     // waveform to output
     ma_waveform *pWaveForm;
@@ -51,17 +49,11 @@ struct call_back_data
     // keying shape envelop data
     key_envelop_type envelop[2];
     // frame the last element end
-    long long last_end;
-/*
-    // decoder buffer
-    char decoder_buffer[DECODE_MAX_ELEMENTS];
-    // decoder pos
-    int decoder_position;
-*/
+    long long last_element_end_frame;
+    // ringbuffer to handover dits and dahs to CW decoder
     ma_rb *pDecoderRb;
-};
+} call_back_data_type;
 
-typedef struct call_back_data call_back_data_type;
 void generate_envelope(double *, int, int, int);
 double dit_length_in_sec(int);
 int samples_per_dit(int, int);
