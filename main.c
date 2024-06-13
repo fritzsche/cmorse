@@ -279,7 +279,10 @@ int main(int argc, char **argv)
     printf("Device Name: %s\n", device.playback.name);
 
     sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, frequency);
-    printf("Sample rate: %d   Channels: %d\n", device.sampleRate, device.playback.channels);
+
+    printf("Sample rate: %d   Channels: %d   Frames: %d\n", device.sampleRate, device.playback.channels, device.playback.internalPeriodSizeInFrames);
+    printf("Sidetone Frequency: %dHz   WPM: %d   \n", frequency, wpm);
+
     userData.sample_per_dit = samples_per_dit(wpm, device.sampleRate);
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
@@ -324,10 +327,10 @@ int main(int argc, char **argv)
         return -5;
     }
 
-    printf("Press Enter to quit...\n");
+    printf("\nPress Enter to quit...");
     getchar();
 
-    printf("Number of Samples: %lli\n", userData.sample_count);
+    printf("\nNumber of Samples: %lli\n", userData.sample_count);
     ma_device_uninit(&device);
 
     (void)argc;
