@@ -62,6 +62,9 @@ int samples_per_ramp(double, int);
 void convert_and_print_morse(char *dit_dah);
 void init_morse_map();
 
+
+void init_envelop(call_back_data_type* userData, int sample_rate, int wpm);
+
 static char *morse_map[][2] = {
     // alpha
     { ".-","a" },

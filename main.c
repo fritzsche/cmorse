@@ -80,7 +80,8 @@ void *decoder_pthreads(void *parm)
             }
             ma_rb_commit_read(p_rb, 1);
         }
-        else ms_sleep(50);// no character in the buffer wait for short period of time        
+        else
+            ms_sleep(50); // no character in the buffer wait for short period of time
     }
 }
 
@@ -190,6 +191,55 @@ void help()
     printf("       Print this help text.\n\n\n");
 }
 
+typedef struct config_data
+{
+    int wpm;       // words per minutes
+    int frequency; // frequency of sidetone
+    int frames;    // frames in a audiobuffer
+} config_type;
+
+void process_options(int argc, char **argv, config_type *conf)
+{
+    // Parameter option
+    int c;
+    int digit_optind = 0;
+    int option_index = 0;
+
+    conf->frames = DEVICE_FRAMES;
+    conf->wpm = DEFAULT_WPM;
+    conf->frequency = SIN_FREQ;
+
+    static struct option long_options[] = {
+
+        {"wpm", required_argument, NULL, 'w'},
+        {"frequency", required_argument, NULL, 'f'},
+        {"package", required_argument, NULL, 'p'},
+        {"help", no_argument, NULL, 'h'},
+        {NULL, 0, NULL, 0}};
+    while ((c = getopt_long(argc, argv, "w:f:p:h",
+                            long_options, &option_index)) != -1)
+    {
+        switch (c)
+        {
+        case 'w':
+            conf->wpm = atoi(optarg);
+            break;
+        case 'f':
+            conf->frequency = atoi(optarg);
+            break;
+        case 'p':
+            conf->frames = atoi(optarg);
+            break;
+        case 'h':
+            help();
+            exit(-1);
+            break;
+        case '?':
+            break;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     ma_waveform sineWave;
@@ -198,6 +248,7 @@ int main(int argc, char **argv)
     ma_waveform_config sineWaveConfig;
     ma_rb ring_buffer;
 
+    config_type conf;
     call_back_data_type userData;
 
     printf("cmorse %s - (c) 2024 by Thomas Fritzsche, DJ1TF\n\n", VERSION);
@@ -213,56 +264,9 @@ int main(int argc, char **argv)
     }
 
     init_morse_map();
-    // Parameter option
-    int c;
-    int digit_optind = 0;
-    int option_index = 0;
-
-    int frames_per_pack = DEVICE_FRAMES;
-    int wpm = DEFAULT_WPM;
-    int frequency = SIN_FREQ;
-
-    static struct option long_options[] = {
-        /*   NAME       ARGUMENT           FLAG  SHORTNAME */
-        {"wpm", required_argument, NULL, 'w'},
-        {"frequency", required_argument, NULL, 'f'},
-        {"package", required_argument, NULL, 'p'},
-        {"help", no_argument, NULL, 'h'},
-        {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:h", // abc:d:012
-                            long_options, &option_index)) != -1)
-    {
-        switch (c)
-        {
-        case 'w':
-            wpm = atoi(optarg);
-            break;
-        case 'f':
-            frequency = atoi(optarg);
-            break;
-        case 'p':
-            frames_per_pack = atoi(optarg);
-            break;
-        case 'h':
-            help();
-            return (-1);
-            break;
-        case '?':
-            break;
-        }
-    }
-
-    atomic_store(&(userData.key.memory[DIT]), 0);
-    atomic_store(&(userData.key.memory[DAH]), 0);
-
-    atomic_store(&(userData.key.state[DIT]), 0);
-    atomic_store(&(userData.key.state[DAH]), 0);
+    process_options(argc,argv,&conf);
 
     open_midi(&userData.key);
-
-    userData.pWaveForm = &sineWave;
-    userData.pDecoderRb = &ring_buffer;
-    userData.sample_count = 0;
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
     deviceConfig.playback.format = DEVICE_FORMAT; // DEVICE_FORMAT;
@@ -270,40 +274,31 @@ int main(int argc, char **argv)
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     deviceConfig.dataCallback = data_callback;
     deviceConfig.pUserData = &userData;
-    deviceConfig.periodSizeInFrames = frames_per_pack;
+    deviceConfig.periodSizeInFrames = conf.frames;
 
     if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS)
     {
         printf("Failed to open playback device.\n");
         return -4;
     }
-    printf("Device Name: %s\n", device.playback.name);
 
-    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, frequency);
-
-    printf("Sample rate: %d   Channels: %d   Frames: %d\n", device.sampleRate, device.playback.channels, device.playback.internalPeriodSizeInFrames);
-    printf("Sidetone Frequency: %dHz   WPM: %d   \n", frequency, wpm);
-
-    userData.sample_per_dit = samples_per_dit(wpm, device.sampleRate);
+    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, conf.frequency);
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
-    // setup dit and dah key envolop shapes
-    int ramp_samples = samples_per_ramp(RAMP_TIME, device.sampleRate);
-    int dit_length = samples_per_dit(wpm, device.sampleRate);
+    printf("Device Name: %s\n", device.playback.name);
+    printf("Sample Rate: %d   Channels: %d   Frames: %d\n", device.sampleRate, device.playback.channels, device.playback.internalPeriodSizeInFrames);
+    printf("Sidetone Frequency: %dHz   WPM: %d   \n", conf.frequency, conf.wpm);
 
-    double *pDitEnvelop = malloc(2 * dit_length * sizeof(double));
-    generate_envelope(pDitEnvelop, dit_length, ramp_samples, 2 * dit_length);
+    atomic_store(&(userData.key.memory[DIT]), 0);
+    atomic_store(&(userData.key.memory[DAH]), 0);
+    atomic_store(&(userData.key.state[DIT]), 0);
+    atomic_store(&(userData.key.state[DAH]), 0);
 
-    double *pDahEnvelop = malloc(4 * dit_length * sizeof(double));
-    generate_envelope(pDahEnvelop, 3 * dit_length, ramp_samples, 4 * dit_length);
-
-    userData.envelop[DIT].envelop = pDitEnvelop;
-    userData.envelop[DIT].length = 2 * dit_length;
-    userData.envelop[DIT].playback_position = 0;
-
-    userData.envelop[DAH].envelop = pDahEnvelop;
-    userData.envelop[DAH].length = 4 * dit_length;
-    userData.envelop[DAH].playback_position = 0;
+    userData.pWaveForm = &sineWave;
+    userData.pDecoderRb = &ring_buffer;
+    userData.sample_count = 0;
+    userData.sample_per_dit = samples_per_dit(conf.wpm, device.sampleRate);
+    init_envelop(&userData, device.sampleRate, conf.wpm);
     userData.current_element = NONE;
     userData.last_element_end_frame = 0;
 
@@ -318,14 +313,14 @@ int main(int argc, char **argv)
     if (pthread_create(&thid, NULL, decoder_pthreads, userData.pDecoderRb) != 0)
     {
         perror("pthread_create() error");
-        exit(1);
+        exit(-1);
     }
 
     if (ma_device_start(&device) != MA_SUCCESS)
     {
         printf("Failed to start playback device.\n");
         ma_device_uninit(&device);
-        return -5;
+        exit(-2);
     }
 
     printf("\nPress Enter to quit...\n");

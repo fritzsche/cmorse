@@ -23,6 +23,26 @@ int samples_per_ramp(double ramp_time, int sample_rate)
 }
 
 
+void init_envelop(call_back_data_type* userData, int sample_rate, int wpm) {
+    // setup dit and dah key envolop shapes
+    int ramp_samples = samples_per_ramp(RAMP_TIME, sample_rate);
+    int dit_length = samples_per_dit(wpm,sample_rate);
+
+    double *pDitEnvelop = malloc(2 * dit_length * sizeof(double));
+    generate_envelope(pDitEnvelop, dit_length, ramp_samples, 2 * dit_length);
+
+    userData->envelop[DIT].envelop = pDitEnvelop;
+    userData->envelop[DIT].length = 2 * dit_length;
+    userData->envelop[DIT].playback_position = 0;
+
+    double *pDahEnvelop = malloc(4 * dit_length * sizeof(double));
+    generate_envelope(pDahEnvelop, 3 * dit_length, ramp_samples, 4 * dit_length);
+
+    userData->envelop[DAH].envelop = pDahEnvelop;
+    userData->envelop[DAH].length = 4 * dit_length;
+    userData->envelop[DAH].playback_position = 0;
+}
+
 
 void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int length)
 {    
