@@ -96,7 +96,60 @@ extern inline void non_block_write(ma_rb *rb, char c)
     ma_rb_commit_write(rb, number);
 }
 
-void data_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
+void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
+{
+    call_back_data_type *userData;
+    MA_ASSERT(pDevice->playback.channels = DEVICE_CHANNELS);
+    userData = (call_back_data_type *)pDevice->pUserData;
+
+    MA_ASSERT(userData->pWaveForm != NULL);
+    MA_ASSERT(pDevice->playback.format == DEVICE_FORMAT);
+    float *samples = (float *)pOutput;
+    ma_waveform_read_pcm_frames(userData->pWaveForm, pOutput, frameCount, NULL);
+    for (int i = 0; i < frameCount; i++)
+    {
+        // State: key uo (not pressed), register a key down --> ramp up
+        if (userData->current_element == KEY_UP && (atomic_load(&(userData->key.state[DIT])) || atomic_load(&(userData->key.state[DAH]))))
+        {
+            userData->current_element = RAMP_UP;
+            userData->envelop[RAMP_UP].playback_position = 0;
+        }
+        // State: key down (pressed), but we register no key pressed --> ramp down
+        if (userData->current_element == KEY_DOWN && (!atomic_load(&(userData->key.state[DIT])) && !atomic_load(&(userData->key.state[DAH]))))
+        {
+            userData->current_element = RAMP_DOWN;
+            userData->envelop[RAMP_DOWN].playback_position = 0;
+        }
+        switch (userData->current_element)
+        {
+        case RAMP_UP:
+            samples[i] *= userData->envelop[RAMP_UP].envelop[userData->envelop[RAMP_UP].playback_position++];
+            if (userData->envelop[RAMP_UP].playback_position >= userData->envelop[RAMP_UP].length)
+            {
+                userData->envelop[RAMP_UP].playback_position = 0;
+                userData->current_element = KEY_DOWN;
+            }
+            break;
+        case RAMP_DOWN:
+            samples[i] *= userData->envelop[RAMP_DOWN].envelop[userData->envelop[RAMP_DOWN].playback_position++];
+            if (userData->envelop[RAMP_DOWN].playback_position >= userData->envelop[RAMP_DOWN].length)
+            {
+                userData->envelop[RAMP_DOWN].playback_position = 0;
+                userData->current_element = KEY_UP;
+            }
+            break;
+        case KEY_UP:
+            samples[i] = 0;
+            break;
+        case KEY_DOWN:
+            break;
+        }
+
+        userData->sample_count++;
+    }
+}
+
+void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
     call_back_data_type *userData;
     MA_ASSERT(pDevice->playback.channels = DEVICE_CHANNELS);
@@ -187,6 +240,8 @@ void help()
     printf("       once by the audio subsystem. Typical values are 32,64 or 128 frames\n");
     printf("       The smaller the number of frames the lower the latency.\n");
     printf("       Default value for the number of frames is %d frames.\n\n", DEVICE_FRAMES);
+    printf("   -s --straight\n");
+    printf("       Staight key mode.\n\n");
     printf("   -h\n");
     printf("       Print this help text.\n\n\n");
 }
@@ -196,6 +251,7 @@ typedef struct config_data
     int wpm;       // words per minutes
     int frequency; // frequency of sidetone
     int frames;    // frames in a audiobuffer
+    char mode;     // keyer mode: Staight / Iambic B
 } config_type;
 
 void process_options(int argc, char **argv, config_type *conf)
@@ -208,15 +264,17 @@ void process_options(int argc, char **argv, config_type *conf)
     conf->frames = DEVICE_FRAMES;
     conf->wpm = DEFAULT_WPM;
     conf->frequency = SIN_FREQ;
+    conf->mode = IAMBIC_B;
 
     static struct option long_options[] = {
 
         {"wpm", required_argument, NULL, 'w'},
         {"frequency", required_argument, NULL, 'f'},
         {"package", required_argument, NULL, 'p'},
+        {"straight", no_argument, NULL, 's'},
         {"help", no_argument, NULL, 'h'},
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:h",
+    while ((c = getopt_long(argc, argv, "w:f:p:hs",
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -233,6 +291,9 @@ void process_options(int argc, char **argv, config_type *conf)
         case 'h':
             help();
             exit(-1);
+            break;
+        case 's':
+            conf->mode = STRAIGHT_KEY;
             break;
         case '?':
             break;
@@ -262,9 +323,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERR: int is not a atomic type on this plattfrom.");
         return (-1);
     }
-
+    // sort the morse decoder map so that bsearch can be used
     init_morse_map();
-    process_options(argc,argv,&conf);
+
+    process_options(argc, argv, &conf);
 
     open_midi(&userData.key);
 
@@ -272,7 +334,10 @@ int main(int argc, char **argv)
     deviceConfig.playback.format = DEVICE_FORMAT; // DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
-    deviceConfig.dataCallback = data_callback;
+    if (conf.mode == STRAIGHT_KEY)
+        deviceConfig.dataCallback = straight_key_callback;
+    else
+        deviceConfig.dataCallback = paddle_key_callback;
     deviceConfig.pUserData = &userData;
     deviceConfig.periodSizeInFrames = conf.frames;
 
@@ -285,9 +350,10 @@ int main(int argc, char **argv)
     sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, conf.frequency);
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
-    printf("Device Name: %s\n", device.playback.name);
+    printf("Audio Device Name: %s\n", device.playback.name);
     printf("Sample Rate: %d   Channels: %d   Frames: %d\n", device.sampleRate, device.playback.channels, device.playback.internalPeriodSizeInFrames);
     printf("Sidetone Frequency: %dHz   WPM: %d   \n", conf.frequency, conf.wpm);
+    printf("Keyermode: %s\n", conf.mode == 'S' ? "Straight" : "Iambic B");
 
     atomic_store(&(userData.key.memory[DIT]), 0);
     atomic_store(&(userData.key.memory[DAH]), 0);
@@ -298,7 +364,10 @@ int main(int argc, char **argv)
     userData.pDecoderRb = &ring_buffer;
     userData.sample_count = 0;
     userData.sample_per_dit = samples_per_dit(conf.wpm, device.sampleRate);
-    init_envelop(&userData, device.sampleRate, conf.wpm);
+    if (conf.mode == STRAIGHT_KEY)
+        init_ramp(&userData, device.sampleRate, conf.wpm);
+    else
+        init_envelop(&userData, device.sampleRate, conf.wpm);
     userData.current_element = NONE;
     userData.last_element_end_frame = 0;
 

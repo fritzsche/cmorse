@@ -23,11 +23,13 @@ int samples_per_ramp(double ramp_time, int sample_rate)
 }
 
 
+
 void init_envelop(call_back_data_type* userData, int sample_rate, int wpm) {
     // setup dit and dah key envolop shapes
     int ramp_samples = samples_per_ramp(RAMP_TIME, sample_rate);
     int dit_length = samples_per_dit(wpm,sample_rate);
 
+    // Dit
     double *pDitEnvelop = malloc(2 * dit_length * sizeof(double));
     generate_envelope(pDitEnvelop, dit_length, ramp_samples, 2 * dit_length);
 
@@ -35,6 +37,7 @@ void init_envelop(call_back_data_type* userData, int sample_rate, int wpm) {
     userData->envelop[DIT].length = 2 * dit_length;
     userData->envelop[DIT].playback_position = 0;
 
+    // Dah
     double *pDahEnvelop = malloc(4 * dit_length * sizeof(double));
     generate_envelope(pDahEnvelop, 3 * dit_length, ramp_samples, 4 * dit_length);
 
@@ -59,6 +62,22 @@ void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int 
         pOutput[tone_samples + ramp_samples - 1 - i] = pOutput[i];
 }
 
+
+void init_ramp(call_back_data_type* userData, int sample_rate, int wpm) {
+    // generate ramp-up and ramp-down
+    int ramp_samples = samples_per_ramp(RAMP_TIME, sample_rate);
+    double *ramp_up = malloc(ramp_samples * sizeof(double));
+    backman_harris_step_response(ramp_up, ramp_samples);    
+    double *ramp_down = malloc(ramp_samples * sizeof(double));  
+    for (int i = 0; i < ramp_samples; i++)
+        ramp_down[ramp_samples - 1 - i] = ramp_up[i];     
+    userData->envelop[RAMP_UP].envelop = ramp_up;
+    userData->envelop[RAMP_UP].length = ramp_samples;
+    userData->envelop[RAMP_UP].playback_position = 0;         
+    userData->envelop[RAMP_DOWN].envelop = ramp_down;
+    userData->envelop[RAMP_DOWN].length = ramp_samples;
+    userData->envelop[RAMP_DOWN].playback_position = 0;       
+}
 
 int compare_sort(const void *arg1, const void *arg2)
 {

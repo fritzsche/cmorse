@@ -11,6 +11,15 @@
 #define SET 1
 #define UNSET 0
 
+#define STRAIGHT_KEY 'S'
+#define IAMBIC_B     'B'
+
+#define KEY_DOWN 2    
+#define KEY_UP   NONE
+
+#define RAMP_DOWN 0    
+#define RAMP_UP   1
+
 #define RAMP_TIME 0.005
 #define DECODE_MAX_ELEMENTS 10
 #define DECODER_END_OF_CHAR '*'
@@ -64,6 +73,7 @@ void init_morse_map();
 
 
 void init_envelop(call_back_data_type* userData, int sample_rate, int wpm);
+void init_ramp(call_back_data_type* userData, int sample_rate, int wpm);
 
 static char *morse_map[][2] = {
     // alpha
