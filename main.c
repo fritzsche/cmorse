@@ -37,7 +37,31 @@ void ms_sleep(int ms)
 #endif
 }
 
-void *decoder_pthreads(void *parm)
+// decoder for straight key
+void *straight_decoder_thread(void *parm)
+{
+    ma_rb *p_rb;
+    p_rb = (ma_rb *)parm;    
+    for (;;)
+    {
+        void *read_pointer;
+        size_t number = 1;
+        ma_rb_acquire_read(p_rb, &number, &read_pointer);
+        if (number == 1) // we found a character
+        {
+            char c = *((char *)read_pointer);
+            // currently we just printf the data comming
+            // from the audio thread
+            printf("Got: %x\n", c);
+            ma_rb_commit_read(p_rb, 1);
+        }
+        else
+            ms_sleep(50);
+    }
+}
+
+// decoder for paddle key actions
+void *paddle_decoder_thread(void *parm)
 {
     ma_rb *p_rb;
 
@@ -113,12 +137,14 @@ void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput
         {
             userData->current_element = RAMP_UP;
             userData->envelop[RAMP_UP].playback_position = 0;
+            non_block_write(userData->pDecoderRb, KEY_DOWN);
         }
         // State: key down (pressed), but we register no key pressed --> ramp down
         if (userData->current_element == KEY_DOWN && (!atomic_load(&(userData->key.state[DIT])) && !atomic_load(&(userData->key.state[DAH]))))
         {
             userData->current_element = RAMP_DOWN;
             userData->envelop[RAMP_DOWN].playback_position = 0;
+            non_block_write(userData->pDecoderRb, KEY_UP);            
         }
         switch (userData->current_element)
         {
@@ -331,7 +357,7 @@ int main(int argc, char **argv)
     open_midi(&userData.key);
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
-    deviceConfig.playback.format = DEVICE_FORMAT; // DEVICE_FORMAT;
+    deviceConfig.playback.format = DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     if (conf.mode == STRAIGHT_KEY)
@@ -379,7 +405,15 @@ int main(int argc, char **argv)
 
     pthread_t thid;
 
-    if (pthread_create(&thid, NULL, decoder_pthreads, userData.pDecoderRb) != 0)
+    if (conf.mode == STRAIGHT_KEY)
+    {
+        if (pthread_create(&thid, NULL, straight_decoder_thread, userData.pDecoderRb) != 0)
+        {
+            perror("pthread_create() error");
+            exit(-1);
+        }
+    }
+    else if (pthread_create(&thid, NULL, paddle_decoder_thread, userData.pDecoderRb) != 0)
     {
         perror("pthread_create() error");
         exit(-1);
