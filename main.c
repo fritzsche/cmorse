@@ -37,6 +37,11 @@ void ms_sleep(int ms)
 #endif
 }
 
+typedef struct straight_key_decoder_data {
+  char event;
+  long long frame;
+} straight_key_decoder_type;
+
 // decoder for straight key
 void *straight_decoder_thread(void *parm)
 {
@@ -45,15 +50,19 @@ void *straight_decoder_thread(void *parm)
     for (;;)
     {
         void *read_pointer;
-        size_t number = 1;
-        ma_rb_acquire_read(p_rb, &number, &read_pointer);
-        if (number == 1) // we found a character
+        size_t number = sizeof(straight_key_decoder_type);
+        ma_rb_acquire_read(p_rb, &number, &read_pointer);        
+        if (number != 0 && number != sizeof(straight_key_decoder_type)) {
+            fprintf(stderr,"Could not get complete buffer for read. Size: %li but got %li",sizeof(straight_key_decoder_type),number);
+            exit(-1);
+        }
+        if (number == sizeof(straight_key_decoder_type)) // we found a character
         {
-            char c = *((char *)read_pointer);
+            straight_key_decoder_type buffer = *((straight_key_decoder_type *)read_pointer);
             // currently we just printf the data comming
             // from the audio thread
-            printf("Got: %x\n", c);
-            ma_rb_commit_read(p_rb, 1);
+            printf("Got %s at frame %lli\n", buffer.event == 0 ? "Down" : "Up", buffer.frame);
+            ma_rb_commit_read(p_rb, sizeof(straight_key_decoder_type));
         }
         else
             ms_sleep(50);
@@ -110,7 +119,7 @@ void *paddle_decoder_thread(void *parm)
 }
 
 // write a character to non-blocking ring buffer
-extern inline void non_block_write(ma_rb *rb, char c)
+extern inline void non_block_write(ma_rb *rb, unsigned char c)
 {
     void *p_write = NULL;
     size_t number = 1;
@@ -118,6 +127,21 @@ extern inline void non_block_write(ma_rb *rb, char c)
     MA_ASSERT(number == 1);
     ((char *)p_write)[0] = c;
     ma_rb_commit_write(rb, number);
+}
+
+extern inline void non_block_write_straight(ma_rb *rb, int e,long long f)
+{
+   void *p_write = NULL;   
+   straight_key_decoder_type buffer = { .event = e , .frame = f};
+
+   size_t number = sizeof(straight_key_decoder_type);
+   ma_rb_acquire_write(rb, &number, &p_write);
+   if (number != sizeof(straight_key_decoder_type)) {
+      fprintf(stderr, "Can not aquire write!");
+      exit(-1);
+   }
+   *((straight_key_decoder_type *) p_write) = buffer;
+   ma_rb_commit_write(rb, number);
 }
 
 void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
@@ -137,14 +161,21 @@ void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput
         {
             userData->current_element = RAMP_UP;
             userData->envelop[RAMP_UP].playback_position = 0;
-            non_block_write(userData->pDecoderRb, KEY_DOWN);
+
+            /*non_block_write(userData->pDecoderRb, 0);
+            non_block_write_long_long(userData->pDecoderRb, userData->sample_count);*/
+
+            non_block_write_straight(userData->pDecoderRb,0,userData->sample_count);
         }
         // State: key down (pressed), but we register no key pressed --> ramp down
         if (userData->current_element == KEY_DOWN && (!atomic_load(&(userData->key.state[DIT])) && !atomic_load(&(userData->key.state[DAH]))))
         {
             userData->current_element = RAMP_DOWN;
             userData->envelop[RAMP_DOWN].playback_position = 0;
-            non_block_write(userData->pDecoderRb, KEY_UP);            
+/*            
+            non_block_write(userData->pDecoderRb, 1);
+            non_block_write_long_long(userData->pDecoderRb, userData->sample_count);   */
+            non_block_write_straight(userData->pDecoderRb,1,userData->sample_count);         
         }
         switch (userData->current_element)
         {
@@ -397,7 +428,8 @@ int main(int argc, char **argv)
     userData.current_element = NONE;
     userData.last_element_end_frame = 0;
 
-    if (ma_rb_init(RING_BUFFER_SIZE, NULL, NULL, userData.pDecoderRb) != MA_SUCCESS)
+    int memory_size = conf.mode == STRAIGHT_KEY ? sizeof(straight_key_decoder_type) * RING_BUFFER_SIZE : RING_BUFFER_SIZE;
+    if (ma_rb_init(memory_size, NULL, NULL, userData.pDecoderRb) != MA_SUCCESS)
     {
         fprintf(stderr, "Failed to initialize ring buffer");
         return -1;
