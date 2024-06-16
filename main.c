@@ -42,11 +42,25 @@ typedef struct straight_key_decoder_data {
   long long frame;
 } straight_key_decoder_type;
 
+
+typedef struct steight_conf {
+  // words per minute
+  int wpm;
+  // ringbuffer to handover dits and dahs to CW decoder
+  ma_rb *p_ring_buffer; 
+  // sample rate
+  int sample_rate; 
+
+} straight_conf_type;
+
 // decoder for straight key
 void *straight_decoder_thread(void *parm)
 {
     ma_rb *p_rb;
-    p_rb = (ma_rb *)parm;    
+    straight_conf_type *conf = (straight_conf_type *) parm;
+    p_rb = conf->p_ring_buffer;  
+
+
     for (;;)
     {
         void *read_pointer;
@@ -80,7 +94,7 @@ void *paddle_decoder_thread(void *parm)
     p_rb = (ma_rb *)parm;
     for (;;)
     {
-        void *read_pointer;
+        void *read_pointer; 
         size_t number = 1;
         ma_rb_acquire_read(p_rb, &number, &read_pointer);
         if (number == 1) // we found a character
@@ -161,10 +175,6 @@ void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput
         {
             userData->current_element = RAMP_UP;
             userData->envelop[RAMP_UP].playback_position = 0;
-
-            /*non_block_write(userData->pDecoderRb, 0);
-            non_block_write_long_long(userData->pDecoderRb, userData->sample_count);*/
-
             non_block_write_straight(userData->pDecoderRb,0,userData->sample_count);
         }
         // State: key down (pressed), but we register no key pressed --> ramp down
@@ -172,9 +182,6 @@ void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput
         {
             userData->current_element = RAMP_DOWN;
             userData->envelop[RAMP_DOWN].playback_position = 0;
-/*            
-            non_block_write(userData->pDecoderRb, 1);
-            non_block_write_long_long(userData->pDecoderRb, userData->sample_count);   */
             non_block_write_straight(userData->pDecoderRb,1,userData->sample_count);         
         }
         switch (userData->current_element)
@@ -439,7 +446,8 @@ int main(int argc, char **argv)
 
     if (conf.mode == STRAIGHT_KEY)
     {
-        if (pthread_create(&thid, NULL, straight_decoder_thread, userData.pDecoderRb) != 0)
+        straight_conf_type decoder_conf = { .wpm = conf.wpm, .sample_rate = device.sampleRate, .p_ring_buffer = userData.pDecoderRb };
+        if (pthread_create(&thid, NULL, straight_decoder_thread, &decoder_conf) != 0)
         {
             perror("pthread_create() error");
             exit(-1);
