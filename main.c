@@ -60,7 +60,16 @@ void *straight_decoder_thread(void *parm)
     straight_conf_type *conf = (straight_conf_type *) parm;
     p_rb = conf->p_ring_buffer;  
 
+    #define NUM_SIG 64
+    int signal[NUM_SIG];
+    int pos = 0;
 
+    float dit_length = -1;
+    float dah_length = -1;
+
+    memset(&signal,0,sizeof(int)*64);
+
+    long long last_down = -1;
     for (;;)
     {
         void *read_pointer;
@@ -75,7 +84,11 @@ void *straight_decoder_thread(void *parm)
             straight_key_decoder_type buffer = *((straight_key_decoder_type *)read_pointer);
             // currently we just printf the data comming
             // from the audio thread
-            printf("Got %s at frame %lli\n", buffer.event == 0 ? "Down" : "Up", buffer.frame);
+      //      printf("Got %s at frame %lli\n", buffer.event == 0 ? "Down" : "Up", buffer.frame);
+            if (buffer.event == 0) last_down = buffer.frame;
+            if (last_down > 0 && buffer.event == 1) signal[pos] = buffer.frame-last_down;
+            //printf("Length: %i\n",buffer.frame-last_down);
+
             ma_rb_commit_read(p_rb, sizeof(straight_key_decoder_type));
         }
         else
