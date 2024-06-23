@@ -25,6 +25,10 @@
 #define DECODER_END_OF_CHAR '*'
 #define DECODER_SPACE_CHAR ' '
 
+#define DECODER_STRAIGHT_KEY_DOWN 0
+#define DECODER_STRAIGHT_KEY_UP 1
+#define DECODER_CHAR_BUFFER_SIZE 32
+
 typedef struct envelop_data
 {
     // envelop -1,...,+1
@@ -65,7 +69,7 @@ typedef struct call_back_data
 
 void generate_envelope(double *, int, int, int);
 double dit_length_in_sec(int);
-int samples_per_dit(int, int);
+int samples_per_dit(int wpm, int sample_rate);
 int samples_per_ramp(double, int);
 
 void convert_and_print_morse(char *dit_dah);

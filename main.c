@@ -7,6 +7,9 @@
 #include "blackman.h"
 #include "midi.h"
 
+#include <time.h>
+#include <stdint.h>
+
 #include <pthread.h>
 #ifdef _WIN64
 #include <windows.h>
@@ -37,62 +40,189 @@ void ms_sleep(int ms)
 #endif
 }
 
-typedef struct straight_key_decoder_data {
-  char event;
-  long long frame;
+typedef struct straight_key_decoder_data
+{
+    char event;
+    long long frame;
 } straight_key_decoder_type;
 
-
-typedef struct steight_conf {
-  // words per minute
-  int wpm;
-  // ringbuffer to handover dits and dahs to CW decoder
-  ma_rb *p_ring_buffer; 
-  // sample rate
-  int sample_rate; 
+typedef struct steight_conf
+{
+    // words per minute
+    int wpm;
+    // ringbuffer to handover dits and dahs to CW decoder
+    ma_rb *p_ring_buffer;
+    // sample rate
+    int sample_rate;
+    // frames each dit takes
+    int frames_per_dit;
+    // frames each dah takes
+    int frames_per_dah;
 
 } straight_conf_type;
+
+
+
+
+long long get_milli_time()
+{
+    struct timespec t;
+    clock_gettime(CLOCK_REALTIME, &t);
+    return t.tv_sec * (long long)(1000) + t.tv_nsec / 1000000;
+};
+
+typedef struct dit_dah_buffer
+{
+    char dit_dah[DECODER_CHAR_BUFFER_SIZE];
+    int position;
+
+} dit_dah_buffer_type;
+
+void init_dit_dah(dit_dah_buffer_type *b)
+{
+    memset(&(b->dit_dah), 0, sizeof(char) * DECODER_CHAR_BUFFER_SIZE);
+    b->position = 0;
+}
+void add_dit_dah(dit_dah_buffer_type *b, char dit_dah)
+{
+    if(b->position >= DECODER_CHAR_BUFFER_SIZE - 1) init_dit_dah(b);
+    b->dit_dah[b->position++] = dit_dah;
+}
+void output_dit_dah(dit_dah_buffer_type *b) 
+{
+    if(b->position != 0) convert_and_print_morse(b->dit_dah);
+    init_dit_dah(b);
+}
+
+
+
+#define DECODER_SPEED_BUFFER_SIZE 16
+
+typedef struct decoder_speed
+{
+    int frames_per_dit;
+    int frames_pder_dah;
+    int position;
+    int speed[ DECODER_SPEED_BUFFER_SIZE ];
+    
+} decoder_speed_type;
+
+
+void init_speed_buffer(decoder_speed_type *b) {
+  memset(&(b->speed), 0, sizeof(int) * DECODER_SPEED_BUFFER_SIZE);
+  b->position = 0;
+}
+
+void add_speed(decoder_speed_type *b, int speed)
+{
+ //   printf("(%i)",speed);
+    if(b->position >= DECODER_SPEED_BUFFER_SIZE - 1) init_speed_buffer(b);
+    b->speed[b->position++] = speed;
+}
+
 
 // decoder for straight key
 void *straight_decoder_thread(void *parm)
 {
     ma_rb *p_rb;
-    straight_conf_type *conf = (straight_conf_type *) parm;
-    p_rb = conf->p_ring_buffer;  
+    dit_dah_buffer_type dit_dah;
+    init_dit_dah(&dit_dah);
+ 
+    decoder_speed_type speed_buffer;
+    init_speed_buffer(&speed_buffer);
 
-    #define NUM_SIG 64
-    int signal[NUM_SIG];
-    int pos = 0;
+    straight_conf_type *conf = (straight_conf_type *)parm;
+    p_rb = conf->p_ring_buffer;
+
+    conf->frames_per_dit = samples_per_dit(conf->wpm, conf->sample_rate);
+    conf->frames_per_dah = 3 * conf->frames_per_dit;
+
+    printf("Decoder: %iwpm, sample rate: %i, dit frames: %i, dah frames: %i", conf->wpm, conf->sample_rate, conf->frames_per_dit, conf->frames_per_dah);
+
+//#define NUM_SIG 64
+//    int signal[NUM_SIG];
+//    int pos = 0;
 
     float dit_length = -1;
     float dah_length = -1;
+    // timer when the key was lifted, to check if character was finished
+    long long up_milli = 0;
 
-    memset(&signal,0,sizeof(int)*64);
+//    memset(&signal, 0, sizeof(int) * 64);
 
     long long last_down = -1;
+    long long last_up = -1;
+
     for (;;)
     {
         void *read_pointer;
         size_t number = sizeof(straight_key_decoder_type);
-        ma_rb_acquire_read(p_rb, &number, &read_pointer);        
-        if (number != 0 && number != sizeof(straight_key_decoder_type)) {
-            fprintf(stderr,"Could not get complete buffer for read. Size: %li but got %li",sizeof(straight_key_decoder_type),number);
+        ma_rb_acquire_read(p_rb, &number, &read_pointer);
+        if (number != 0 && number != sizeof(straight_key_decoder_type))
+        {
+            fprintf(stderr, "Could not get complete buffer for read. Size: %li but got %li", sizeof(straight_key_decoder_type), number);
             exit(-1);
         }
         if (number == sizeof(straight_key_decoder_type)) // we found a character
         {
             straight_key_decoder_type buffer = *((straight_key_decoder_type *)read_pointer);
-            // currently we just printf the data comming
-            // from the audio thread
-      //      printf("Got %s at frame %lli\n", buffer.event == 0 ? "Down" : "Up", buffer.frame);
-            if (buffer.event == 0) last_down = buffer.frame;
-            if (last_down > 0 && buffer.event == 1) signal[pos] = buffer.frame-last_down;
-            //printf("Length: %i\n",buffer.frame-last_down);
+
+            // memorize when we have pressed of lifted the key
+            if (buffer.event == DECODER_STRAIGHT_KEY_DOWN)
+                last_down = buffer.frame;
+            if (buffer.event == DECODER_STRAIGHT_KEY_UP)
+                last_up = buffer.frame;
+
+            // key lifted up check now long the key was down and calculate if
+            // it was dit or dah
+            if (last_down > 0 && buffer.event == DECODER_STRAIGHT_KEY_UP)
+            {
+                // set time when to check character complete.
+                // TODO: need to update once variable speed is implemented
+                up_milli = get_milli_time() + 5 * dit_length_in_sec(conf->wpm) * 1000;
+
+               
+
+                int down_length = buffer.frame - last_down;
+                add_speed(&speed_buffer, down_length);
+
+
+                int dit_diff = abs(conf->frames_per_dit - down_length);
+                int dah_diff = abs(conf->frames_per_dah - down_length);
+                if (dit_diff < dah_diff)
+                    add_dit_dah(&dit_dah,'.');
+                else
+                    add_dit_dah(&dit_dah,'-');
+                fflush(stdout);
+            }
+            // key pressed check now long it was up and calculate if
+            // this was long to be intra character / word space
+            if (last_up > 0 && buffer.event == DECODER_STRAIGHT_KEY_DOWN)
+            {
+                up_milli = 0;
+                int up_length = buffer.frame - last_up;
+                if (up_length > 4 * conf->frames_per_dit)
+                {
+                    output_dit_dah(&dit_dah);
+                    printf(" ");
+                    fflush(stdout);
+                }
+                else if (up_length > 2 * conf->frames_per_dit)
+                {
+                    output_dit_dah(&dit_dah);
+                }
+
+            }
 
             ma_rb_commit_read(p_rb, sizeof(straight_key_decoder_type));
         }
-        else
-            ms_sleep(50);
+        else if (up_milli > 0 && get_milli_time() > up_milli)
+        {
+            up_milli = 0;
+            output_dit_dah(&dit_dah);
+            fflush(stdout);
+        }
+        ms_sleep(50);
     }
 }
 
@@ -107,7 +237,7 @@ void *paddle_decoder_thread(void *parm)
     p_rb = (ma_rb *)parm;
     for (;;)
     {
-        void *read_pointer; 
+        void *read_pointer;
         size_t number = 1;
         ma_rb_acquire_read(p_rb, &number, &read_pointer);
         if (number == 1) // we found a character
@@ -156,19 +286,20 @@ extern inline void non_block_write(ma_rb *rb, unsigned char c)
     ma_rb_commit_write(rb, number);
 }
 
-extern inline void non_block_write_straight(ma_rb *rb, int e,long long f)
+extern inline void non_block_write_straight(ma_rb *rb, int e, long long f)
 {
-   void *p_write = NULL;   
-   straight_key_decoder_type buffer = { .event = e , .frame = f};
+    void *p_write = NULL;
+    straight_key_decoder_type buffer = {.event = e, .frame = f};
 
-   size_t number = sizeof(straight_key_decoder_type);
-   ma_rb_acquire_write(rb, &number, &p_write);
-   if (number != sizeof(straight_key_decoder_type)) {
-      fprintf(stderr, "Can not aquire write!");
-      exit(-1);
-   }
-   *((straight_key_decoder_type *) p_write) = buffer;
-   ma_rb_commit_write(rb, number);
+    size_t number = sizeof(straight_key_decoder_type);
+    ma_rb_acquire_write(rb, &number, &p_write);
+    if (number != sizeof(straight_key_decoder_type))
+    {
+        fprintf(stderr, "Can not aquire write!");
+        exit(-1);
+    }
+    *((straight_key_decoder_type *)p_write) = buffer;
+    ma_rb_commit_write(rb, number);
 }
 
 void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
@@ -188,14 +319,14 @@ void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput
         {
             userData->current_element = RAMP_UP;
             userData->envelop[RAMP_UP].playback_position = 0;
-            non_block_write_straight(userData->pDecoderRb,0,userData->sample_count);
+            non_block_write_straight(userData->pDecoderRb, 0, userData->sample_count);
         }
         // State: key down (pressed), but we register no key pressed --> ramp down
         if (userData->current_element == KEY_DOWN && (!atomic_load(&(userData->key.state[DIT])) && !atomic_load(&(userData->key.state[DAH]))))
         {
             userData->current_element = RAMP_DOWN;
             userData->envelop[RAMP_DOWN].playback_position = 0;
-            non_block_write_straight(userData->pDecoderRb,1,userData->sample_count);         
+            non_block_write_straight(userData->pDecoderRb, 1, userData->sample_count);
         }
         switch (userData->current_element)
         {
@@ -459,7 +590,7 @@ int main(int argc, char **argv)
 
     if (conf.mode == STRAIGHT_KEY)
     {
-        straight_conf_type decoder_conf = { .wpm = conf.wpm, .sample_rate = device.sampleRate, .p_ring_buffer = userData.pDecoderRb };
+        straight_conf_type decoder_conf = {.wpm = conf.wpm, .sample_rate = device.sampleRate, .p_ring_buffer = userData.pDecoderRb};
         if (pthread_create(&thid, NULL, straight_decoder_thread, &decoder_conf) != 0)
         {
             perror("pthread_create() error");
