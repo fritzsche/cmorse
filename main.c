@@ -61,9 +61,6 @@ typedef struct steight_conf
 
 } straight_conf_type;
 
-
-
-
 long long get_milli_time()
 {
     struct timespec t;
@@ -85,70 +82,129 @@ void init_dit_dah(dit_dah_buffer_type *b)
 }
 void add_dit_dah(dit_dah_buffer_type *b, char dit_dah)
 {
-    if(b->position >= DECODER_CHAR_BUFFER_SIZE - 1) init_dit_dah(b);
+    if (b->position >= DECODER_CHAR_BUFFER_SIZE - 1)
+        init_dit_dah(b);
     b->dit_dah[b->position++] = dit_dah;
 }
-void output_dit_dah(dit_dah_buffer_type *b) 
+void output_dit_dah(dit_dah_buffer_type *b)
 {
-    if(b->position != 0) convert_and_print_morse(b->dit_dah);
+    if (b->position != 0)
+        convert_and_print_morse(b->dit_dah);
     init_dit_dah(b);
 }
 
-
-
-#define DECODER_SPEED_BUFFER_SIZE 16
+#define DECODER_SPEED_BUFFER_SIZE 10
 
 typedef struct decoder_speed
 {
     int frames_per_dit;
-    int frames_pder_dah;
+    int frames_per_dah;
     int position;
-    int speed[ DECODER_SPEED_BUFFER_SIZE ];
-    
+    int speed[DECODER_SPEED_BUFFER_SIZE];
+
 } decoder_speed_type;
 
+void init_speed_buffer(decoder_speed_type *b)
+{
+    memset(&(b->speed), 0, sizeof(int) * DECODER_SPEED_BUFFER_SIZE);
+    b->position = 0;
+}
 
-void init_speed_buffer(decoder_speed_type *b) {
-  memset(&(b->speed), 0, sizeof(int) * DECODER_SPEED_BUFFER_SIZE);
-  b->position = 0;
+void determine_speed(decoder_speed_type *b)
+{
+    
+    // determine min and max
+    float min = b->speed[0], max = b->speed[0];
+    for (int i = 0; i < DECODER_SPEED_BUFFER_SIZE; i++)
+    {
+        int sp = b->speed[i];
+        if (sp != 0 && sp < min)
+            min = sp;
+        if (sp != 0 && sp > max)
+            max = sp;
+    }
+    // kmeans (k=2)
+    for (int i = 0; i < 10; i++)
+    {
+        float last_min = min, last_max = max;
+        int min_sum = 0;
+        int max_sum = 0;
+        int min_n = 0;
+        int max_n = 0;
+        for (int j = 0; j < DECODER_SPEED_BUFFER_SIZE; j++)
+        {
+            int sp = b->speed[j];
+            if (fabs(min - sp) < fabs(max - sp))
+            {
+                min_sum += sp;
+                min_n++;
+            }
+            else
+            {
+                max_sum += sp;
+                max_n++;
+            }
+        }
+        if (min_n != 0)
+            min = min_sum / min_n;
+        if (max_n != 0)
+            max = max_sum / max_n;
+        //    printf("Result Min: %f / Max: %f",min,max);
+        if (last_min == min && last_max == max)
+            break;
+    }
+
+    if (min > 0 && min * 2 < max)
+    {
+     //   printf("Result Min: %f / Max: %f",min,max);
+        b->frames_per_dah = (int)floor(max);
+        b->frames_per_dit = (int)floor(min);
+    }
+  
 }
 
 void add_speed(decoder_speed_type *b, int speed)
 {
- //   printf("(%i)",speed);
-    if(b->position >= DECODER_SPEED_BUFFER_SIZE - 1) init_speed_buffer(b);
+    if (b->position >= DECODER_SPEED_BUFFER_SIZE)
+    {
+        determine_speed(b);
+        init_speed_buffer(b);
+    }
     b->speed[b->position++] = speed;
 }
-
 
 // decoder for straight key
 void *straight_decoder_thread(void *parm)
 {
+    straight_conf_type *conf = (straight_conf_type *)parm;
     ma_rb *p_rb;
     dit_dah_buffer_type dit_dah;
     init_dit_dah(&dit_dah);
- 
+
     decoder_speed_type speed_buffer;
     init_speed_buffer(&speed_buffer);
+    
 
-    straight_conf_type *conf = (straight_conf_type *)parm;
+    speed_buffer.frames_per_dit = samples_per_dit(conf->wpm, conf->sample_rate);
+    speed_buffer.frames_per_dah = 3 * speed_buffer.frames_per_dit;
+
     p_rb = conf->p_ring_buffer;
 
     conf->frames_per_dit = samples_per_dit(conf->wpm, conf->sample_rate);
     conf->frames_per_dah = 3 * conf->frames_per_dit;
 
-    printf("Decoder: %iwpm, sample rate: %i, dit frames: %i, dah frames: %i", conf->wpm, conf->sample_rate, conf->frames_per_dit, conf->frames_per_dah);
+    printf("Decoder: %iwpm, sample rate: %i, dit frames: %i, dah frames: %i", conf->wpm, conf->sample_rate, speed_buffer.frames_per_dit, speed_buffer.frames_per_dah);
 
-//#define NUM_SIG 64
-//    int signal[NUM_SIG];
-//    int pos = 0;
+    // #define NUM_SIG 64
+    //     int signal[NUM_SIG];
+    //     int pos = 0;
 
     float dit_length = -1;
     float dah_length = -1;
     // timer when the key was lifted, to check if character was finished
     long long up_milli = 0;
 
-//    memset(&signal, 0, sizeof(int) * 64);
+    //    memset(&signal, 0, sizeof(int) * 64);
 
     long long last_down = -1;
     long long last_up = -1;
@@ -178,21 +234,26 @@ void *straight_decoder_thread(void *parm)
             if (last_down > 0 && buffer.event == DECODER_STRAIGHT_KEY_UP)
             {
                 // set time when to check character complete.
+
+
                 // TODO: need to update once variable speed is implemented
-                up_milli = get_milli_time() + 5 * dit_length_in_sec(conf->wpm) * 1000;
-
-               
-
+           //     printf("\norig: %f\n", 5 * ( (float) speed_buffer.frames_per_dit / conf->sample_rate  )  * 1000);
+           //     printf("\nold: %f\n", 5 * dit_length_in_sec( conf->wpm )  * 1000);
+                long long current_time = get_milli_time();
+            //    printf("\ntime %lli\n", current_time );
+                up_milli = current_time + 5.0 * ( (float)speed_buffer.frames_per_dit / (float)conf->sample_rate  )  * 1000.0; // get_milli_time() +  //speed_buffer.frames_per_dit / conf->sample_rate 
+          //      printf("\nnew_mil %lli\n", up_milli );
+         //       up_milli = current_time + 5 * ( dit_length_in_sec( conf->wpm )  * 1000);
+          //      printf("\nmil %lli\n", up_milli );                
                 int down_length = buffer.frame - last_down;
                 add_speed(&speed_buffer, down_length);
 
-
-                int dit_diff = abs(conf->frames_per_dit - down_length);
-                int dah_diff = abs(conf->frames_per_dah - down_length);
+                int dit_diff = abs(speed_buffer.frames_per_dit - down_length);
+                int dah_diff = abs(speed_buffer.frames_per_dah - down_length);
                 if (dit_diff < dah_diff)
-                    add_dit_dah(&dit_dah,'.');
+                    add_dit_dah(&dit_dah, '.');
                 else
-                    add_dit_dah(&dit_dah,'-');
+                    add_dit_dah(&dit_dah, '-');
                 fflush(stdout);
             }
             // key pressed check now long it was up and calculate if
@@ -201,17 +262,16 @@ void *straight_decoder_thread(void *parm)
             {
                 up_milli = 0;
                 int up_length = buffer.frame - last_up;
-                if (up_length > 4 * conf->frames_per_dit)
+                if (up_length > 4 * speed_buffer.frames_per_dit)
                 {
                     output_dit_dah(&dit_dah);
                     printf(" ");
                     fflush(stdout);
                 }
-                else if (up_length > 2 * conf->frames_per_dit)
+                else if (up_length > 2 * speed_buffer.frames_per_dit)
                 {
                     output_dit_dah(&dit_dah);
                 }
-
             }
 
             ma_rb_commit_read(p_rb, sizeof(straight_key_decoder_type));
