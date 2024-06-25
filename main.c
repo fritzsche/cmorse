@@ -262,7 +262,7 @@ void *straight_decoder_thread(void *parm)
             {
                 up_milli = 0;
                 int up_length = buffer.frame - last_up;
-                if (up_length > 4 * speed_buffer.frames_per_dit)
+                if (up_length > 6 * speed_buffer.frames_per_dit)
                 {
                     output_dit_dah(&dit_dah);
                     printf(" ");
