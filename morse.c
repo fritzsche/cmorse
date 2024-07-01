@@ -54,7 +54,7 @@ void generate_envelope(double *pOutput, int tone_samples, int ramp_samples, int 
     // set the tone samples to 1
     for (int i = 0; i < tone_samples; i++) pOutput[i] = 1.0;
 
-    // QEX May/Jone 2006 3 / CW Shaping in DSP Software
+    // QEX May/June 2006 3 / CW Shaping in DSP Software
     // generate ramp up
     backman_harris_step_response(pOutput, ramp_samples);
     // copy ramp up to ramp down (inverse order)

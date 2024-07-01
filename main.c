@@ -235,16 +235,9 @@ void *straight_decoder_thread(void *parm)
             {
                 // set time when to check character complete.
 
-
-                // TODO: need to update once variable speed is implemented
-           //     printf("\norig: %f\n", 5 * ( (float) speed_buffer.frames_per_dit / conf->sample_rate  )  * 1000);
-           //     printf("\nold: %f\n", 5 * dit_length_in_sec( conf->wpm )  * 1000);
                 long long current_time = get_milli_time();
-            //    printf("\ntime %lli\n", current_time );
                 up_milli = current_time + 5.0 * ( (float)speed_buffer.frames_per_dit / (float)conf->sample_rate  )  * 1000.0; // get_milli_time() +  //speed_buffer.frames_per_dit / conf->sample_rate 
-          //      printf("\nnew_mil %lli\n", up_milli );
-         //       up_milli = current_time + 5 * ( dit_length_in_sec( conf->wpm )  * 1000);
-          //      printf("\nmil %lli\n", up_milli );                
+             
                 int down_length = buffer.frame - last_down;
                 add_speed(&speed_buffer, down_length);
 
@@ -509,7 +502,7 @@ void help()
     printf("       The smaller the number of frames the lower the latency.\n");
     printf("       Default value for the number of frames is %d frames.\n\n", DEVICE_FRAMES);
     printf("   -s --straight\n");
-    printf("       Staight key mode.\n\n");
+    printf("       Straight key mode.\n\n");
     printf("   -h\n");
     printf("       Print this help text.\n\n\n");
 }
