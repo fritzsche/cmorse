@@ -573,6 +573,13 @@ int main(int argc, char **argv)
     config_type conf;
     call_back_data_type userData;
 
+#ifdef _WIN64
+    int cp = GetConsoleOutputCP();
+    SetConsoleOutputCP(CP_UTF8);
+    printf(u8"日本語");
+    SetConsoleOutputCP(cp);
+#endif
+
     printf("cmorse %s - (c) 2024 by Thomas Fritzsche, DJ1TF\n\n", VERSION);
 
     // check if atomic int is lock free, that should be the case on all
