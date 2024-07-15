@@ -576,7 +576,10 @@ int main(int argc, char **argv)
 #ifdef _WIN64
     int cp = GetConsoleOutputCP();
     SetConsoleOutputCP(CP_UTF8);
+#endif
+
     printf(u8"日本語");
+#ifdef _WIN64
     SetConsoleOutputCP(cp);
 #endif
 
