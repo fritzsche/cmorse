@@ -578,10 +578,6 @@ int main(int argc, char **argv)
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    printf(u8"日本語");
-#ifdef _WIN64
-    SetConsoleOutputCP(cp);
-#endif
 
     printf("cmorse %s - (c) 2024 by Thomas Fritzsche, DJ1TF\n\n", VERSION);
 
@@ -679,6 +675,9 @@ int main(int argc, char **argv)
     printf("\nNumber of Samples: %lli\n", userData.sample_count);
     ma_device_uninit(&device);
 
+#ifdef _WIN64
+    SetConsoleOutputCP(cp);
+#endif
     (void)argc;
     (void)argv;
     return 0;
