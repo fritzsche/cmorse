@@ -149,7 +149,7 @@ int open_midi(void *p_key_state)
   HMODULE winmm = (ma_handle)LoadLibrary("winmm.dll");
   if (winmm == NULL) {
     fprintf(stderr,"Error loading winmm\n");
-    exit(1);
+    exit(-1);
   }
   
   midiInGetNumDevs_proc my_midiInGetNumDevs = (midiInGetNumDevs_proc) GetProcAddress(winmm, "midiInGetNumDevs");
@@ -158,8 +158,8 @@ int open_midi(void *p_key_state)
 
 	nMidiDeviceNum = my_midiInGetNumDevs();
 	if (nMidiDeviceNum == 0) {
-		fprintf(stderr, "midiInGetNumDevs() return 0\n");
-		return -1;
+		fprintf(stderr, "No Midi device found.\n");
+		exit(-1);
 	}
     printf("Number of midi devices: %i \n",nMidiDeviceNum);
 
