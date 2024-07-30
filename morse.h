@@ -79,6 +79,7 @@ void init_morse_map();
 void init_envelop(call_back_data_type* userData, int sample_rate, int wpm);
 void init_ramp(call_back_data_type* userData, int sample_rate, int wpm);
 
+#ifndef WABUN
 static char *morse_map[][2] = {
     // alpha
     { ".-",u8"a" },
@@ -135,7 +136,80 @@ static char *morse_map[][2] = {
     {"...-.-", u8"<sk>"}, //  End of contact / End of work
     {".-.-.", u8"<ar>"}, // End of transmission / End of message
     {"-.--.", u8"<kn>"}, // Go ahead, specific named station.    
-    {"........", u8"<error>"} // Go ahead, specific named station.       
+    {"........", u8"<error>"} // Error.       
    };
 
+#else
+
+static char *morse_map[][2] = {
+    // kana
+    { ".-",u8"い" },
+    {".-.-",u8"ろ"},
+    {"-...",u8"は"},
+    {"-.-.", u8"に"},
+    {"-..", u8"ほ"},
+    {".",u8"へ"},
+    {"..-..", u8"と"},
+    {"..-.", u8"ち"},
+    {"--.", u8"り"},
+    {"....", u8"ぬ"},
+    {"-.--.", u8"る"},
+    {".---", u8"を"},
+    {"-.-", u8"わ"},
+    {".-..", u8"か"},
+    {"--", u8"よ "},
+    {"-.", u8"た"},
+    {"---", u8"れ"},
+    {"---.", u8"そ"},
+    {".--.", u8"つ"},
+    {"--.-", u8"ね"},
+    {".-.", u8"な"},
+    {"...", u8"ら"},
+    {"-", u8"む"},
+    {"..-", u8"う"},
+    {"-.-.-", u8"さ"},
+    {"-.-..", u8"き"},
+
+    {"-..--", u8"ゆ"},
+    {"-...-", u8"め"},   
+    {"..-.-", u8"み"},
+    {"--.-.", u8"し"},   
+    {".--..", u8"ゑ"},
+    {"--..-", u8"ひ"},   
+    {"-..-.", u8"も"},
+    {".---.", u8"せ"},   
+    {"---.-", u8"す"},  
+    {".-.-.", u8"ん"}, 
+
+    // numbers   
+    {".----", u8"1"},
+    {"..---", u8"2"},
+    {"...--", u8"3"},
+    {"....-", u8"4"},
+    {".....", u8"5"},
+    {"-....", u8"6"},
+    {"--...", u8"7"},
+    {"---..", u8"8"},
+    {"----.", u8"9"},
+    {"-----", u8"0"},
+    // punctuation   
+
+    // Dakuten
+    {"..", u8"゛"},
+    // Handakuten
+    {"..--.", u8"゜"},
+    // Chōonpu
+    {".--.-", u8"ー"},
+    {".-.-.-", u8"、"},
+    {".-.-..", u8"。"},
+    {"-.--.-", u8"（"},
+    {".-..-.", u8"）"},           
+
+
+    {"-..---", u8"<DO>"}, // Begin of Wabun
+    {"...-.", u8"<SN>"}, //  End of Wabun
+    {"........", u8"<error>"} // Error.       
+   };
+
+#endif
 #endif 
