@@ -422,7 +422,7 @@ void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, 
     float *samples = (float *)pOutput;
     ma_waveform_read_pcm_frames(userData->pWaveForm, pOutput, frameCount, NULL);
 
-    // apply the envolop
+    // apply the envelop
     int ce = userData->current_element;
     for (int i = 0; i < frameCount; i++)
     {
@@ -458,9 +458,9 @@ void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, 
                     non_block_write(userData->pDecoderRb, '.');
                 else
                     non_block_write(userData->pDecoderRb, '-');
-                // reset the payback position of the envolope at end of the element
+                // reset the payback position of the envelope at end of the element
                 userData->envelop[ce].playback_position = 0;
-                // if at the end of an element the respectve key is not pressed: delete the memory
+                // if at the end of an element the respective key is not pressed: delete the memory
                 if (!atomic_load(&(userData->key.state[ce])))
                     atomic_store(&(userData->key.memory[ce]), 0);
                 // play the opposite element is the opposite memory is set
@@ -569,6 +569,8 @@ int main(int argc, char **argv)
     ma_device device;
     ma_waveform_config sineWaveConfig;
     ma_rb ring_buffer;
+    ma_context context;    
+    ma_context_config context_config;
 
     config_type conf;
     call_back_data_type userData;
@@ -582,12 +584,12 @@ int main(int argc, char **argv)
     printf("cmorse %s - (c) 2024 by Thomas Fritzsche, DJ1TF\n\n", VERSION);
 
     // check if atomic int is lock free, that should be the case on all
-    // major plattform (Intel/Arm etc.)
+    // major platform (Intel/Arm etc.)
     // This can be just on a variable/instance
     atomic_int test_lock_free;
     if (!atomic_is_lock_free(&test_lock_free))
     {
-        fprintf(stderr, "ERR: int is not a atomic type on this plattfrom.");
+        fprintf(stderr, "ERR: int is not a atomic type on this platform.");
         return (-1);
     }
     // sort the morse decoder map so that bsearch can be used
@@ -597,9 +599,23 @@ int main(int argc, char **argv)
 
     open_midi(&userData.key);
 
+
+    context_config = ma_context_config_init();
+    context_config.threadPriority = ma_thread_priority_realtime;
+
+    if (ma_context_init(NULL, 0, &context_config, &context) != MA_SUCCESS) {
+        printf("Failed to initialize the audio context.\n");
+        return -1;      
+    }
+
     deviceConfig = ma_device_config_init(ma_device_type_playback);
     deviceConfig.playback.format = DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
+
+    deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
+    deviceConfig.noClip = MA_TRUE;
+    deviceConfig.noFixedSizedCallback = MA_TRUE;
+
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     if (conf.mode == STRAIGHT_KEY)
         deviceConfig.dataCallback = straight_key_callback;
@@ -608,7 +624,7 @@ int main(int argc, char **argv)
     deviceConfig.pUserData = &userData;
     deviceConfig.periodSizeInFrames = conf.frames;
 
-    if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS)
+    if (ma_device_init(&context, &deviceConfig, &device) != MA_SUCCESS)
     {
         printf("Failed to open playback device.\n");
         return -4;
@@ -666,7 +682,7 @@ int main(int argc, char **argv)
     {
         printf("Failed to start playback device.\n");
         ma_device_uninit(&device);
-        exit(-2);
+        exit(-1);
     }
 
     printf("\nPress Enter to quit...\n");
