@@ -1,6 +1,7 @@
 #define MA_NO_DECODING
 #define MA_NO_ENCODING
 #define MINIAUDIO_IMPLEMENTATION
+#define MA_DEBUG_OUTPUT
 #include "miniaudio.h"
 
 #include "morse.h"
@@ -413,8 +414,11 @@ void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput
 void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, ma_uint32 frameCount)
 {
     call_back_data_type *userData;
+
     MA_ASSERT(pDevice->playback.channels = DEVICE_CHANNELS);
     userData = (call_back_data_type *)pDevice->pUserData;
+
+ //   printf("Frames: %d\n",frameCount);
 
     MA_ASSERT(userData->pWaveForm != NULL);
     MA_ASSERT(pDevice->playback.format == DEVICE_FORMAT);
@@ -597,9 +601,18 @@ int main(int argc, char **argv)
 
     open_midi(&userData.key);
 
+  /*  ma_context_config contextConfig = ma_context_config_init();
+    contextConfig.threadPriority = ma_thread_priority_realtime;
+*/
     deviceConfig = ma_device_config_init(ma_device_type_playback);
     deviceConfig.playback.format = DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
+
+// For latency testing    
+    deviceConfig.playback.shareMode = ma_share_mode_exclusive;
+    deviceConfig.noFixedSizedCallback = MA_TRUE;      
+    deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
+
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     if (conf.mode == STRAIGHT_KEY)
         deviceConfig.dataCallback = straight_key_callback;
