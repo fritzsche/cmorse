@@ -112,7 +112,7 @@ void init_speed_buffer(decoder_speed_type *b)
 
 void determine_speed(decoder_speed_type *b)
 {
-    
+
     // determine min and max
     float min = b->speed[0], max = b->speed[0];
     for (int i = 0; i < DECODER_SPEED_BUFFER_SIZE; i++)
@@ -156,11 +156,10 @@ void determine_speed(decoder_speed_type *b)
 
     if (min > 0 && min * 2 < max)
     {
-     //   printf("Result Min: %f / Max: %f",min,max);
+        //   printf("Result Min: %f / Max: %f",min,max);
         b->frames_per_dah = (int)floor(max);
         b->frames_per_dit = (int)floor(min);
     }
-  
 }
 
 void add_speed(decoder_speed_type *b, int speed)
@@ -183,7 +182,6 @@ void *straight_decoder_thread(void *parm)
 
     decoder_speed_type speed_buffer;
     init_speed_buffer(&speed_buffer);
-    
 
     speed_buffer.frames_per_dit = samples_per_dit(conf->wpm, conf->sample_rate);
     speed_buffer.frames_per_dah = 3 * speed_buffer.frames_per_dit;
@@ -236,8 +234,8 @@ void *straight_decoder_thread(void *parm)
                 // set time when to check character complete.
 
                 long long current_time = get_milli_time();
-                up_milli = current_time + 5.0 * ( (float)speed_buffer.frames_per_dit / (float)conf->sample_rate  )  * 1000.0; // get_milli_time() +  //speed_buffer.frames_per_dit / conf->sample_rate 
-             
+                up_milli = current_time + 5.0 * ((float)speed_buffer.frames_per_dit / (float)conf->sample_rate) * 1000.0; // get_milli_time() +  //speed_buffer.frames_per_dit / conf->sample_rate
+
                 int down_length = buffer.frame - last_down;
                 add_speed(&speed_buffer, down_length);
 
@@ -503,6 +501,10 @@ void help()
     printf("       Default value for the number of frames is %d frames.\n\n", DEVICE_FRAMES);
     printf("   -s --straight\n");
     printf("       Straight key mode.\n\n");
+#ifdef _WIN64
+    printf("   -x --exclusive\n");
+    printf("       Use the WASAPI exclusive mode.\n\n");
+#endif
     printf("   -h\n");
     printf("       Print this help text.\n\n\n");
 }
@@ -513,6 +515,9 @@ typedef struct config_data
     int frequency; // frequency of sidetone
     int frames;    // frames in a audiobuffer
     char mode;     // keyer mode: Staight / Iambic B
+#ifdef _WIN64
+    boolean wasapi_exclusive; // Use the wasapi exclusive mode
+#endif
 } config_type;
 
 void process_options(int argc, char **argv, config_type *conf)
@@ -526,6 +531,9 @@ void process_options(int argc, char **argv, config_type *conf)
     conf->wpm = DEFAULT_WPM;
     conf->frequency = SIN_FREQ;
     conf->mode = IAMBIC_B;
+#ifdef _WIN64
+    conf->wasapi_exclusive = 0;
+#endif
 
     static struct option long_options[] = {
 
@@ -533,9 +541,11 @@ void process_options(int argc, char **argv, config_type *conf)
         {"frequency", required_argument, NULL, 'f'},
         {"package", required_argument, NULL, 'p'},
         {"straight", no_argument, NULL, 's'},
+        {"exclusive", no_argument, NULL, 'x'},
         {"help", no_argument, NULL, 'h'},
+
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:hs",
+    while ((c = getopt_long(argc, argv, "w:f:p:hsx",
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -556,6 +566,9 @@ void process_options(int argc, char **argv, config_type *conf)
         case 's':
             conf->mode = STRAIGHT_KEY;
             break;
+        case 'x':
+            conf->wasapi_exclusive = 1;
+            break;
         case '?':
             break;
         }
@@ -569,7 +582,7 @@ int main(int argc, char **argv)
     ma_device device;
     ma_waveform_config sineWaveConfig;
     ma_rb ring_buffer;
-    ma_context context;    
+    ma_context context;
     ma_context_config context_config;
 
     config_type conf;
@@ -579,7 +592,6 @@ int main(int argc, char **argv)
     int cp = GetConsoleOutputCP();
     SetConsoleOutputCP(CP_UTF8);
 #endif
-
 
     printf("cmorse %s - (c) 2024 by Thomas Fritzsche, DJ1TF\n\n", VERSION);
 
@@ -599,13 +611,13 @@ int main(int argc, char **argv)
 
     open_midi(&userData.key);
 
-
     context_config = ma_context_config_init();
     context_config.threadPriority = ma_thread_priority_realtime;
 
-    if (ma_context_init(NULL, 0, &context_config, &context) != MA_SUCCESS) {
+    if (ma_context_init(NULL, 0, &context_config, &context) != MA_SUCCESS)
+    {
         printf("Failed to initialize the audio context.\n");
-        return -1;      
+        return -1;
     }
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
@@ -615,6 +627,14 @@ int main(int argc, char **argv)
     deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
     deviceConfig.noClip = MA_TRUE;
     deviceConfig.noFixedSizedCallback = MA_TRUE;
+
+#ifdef _WIN64
+    if (conf.wasapi_exclusive)
+    {
+        deviceConfig.playback.shareMode = ma_share_mode_exclusive;
+        deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
+    }
+#endif
 
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
     if (conf.mode == STRAIGHT_KEY)
@@ -635,6 +655,10 @@ int main(int argc, char **argv)
 
     printf("Audio Device Name: %s\n", device.playback.name);
     printf("Sample Rate: %d   Channels: %d   Frames: %d\n", device.sampleRate, device.playback.channels, device.playback.internalPeriodSizeInFrames);
+#ifdef _WIN64
+    if (ma_share_mode_exclusive == deviceConfig.playback.shareMode)
+        printf("Using WASAPI exclusive mode\n");
+#endif
     printf("Sidetone Frequency: %dHz   WPM: %d   \n", conf.frequency, conf.wpm);
     printf("Keyermode: %s\n", conf.mode == 'S' ? "Straight" : "Iambic B");
 
