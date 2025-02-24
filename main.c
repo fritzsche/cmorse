@@ -624,15 +624,16 @@ int main(int argc, char **argv)
     deviceConfig.playback.format = DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
 
-    deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
-    deviceConfig.noClip = MA_TRUE;
-    deviceConfig.noFixedSizedCallback = MA_TRUE;
+   
 
 #ifdef _WIN64
     if (conf.wasapi_exclusive)
     {
         deviceConfig.playback.shareMode = ma_share_mode_exclusive;
         deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
+        deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
+    //    deviceConfig.noClip = MA_TRUE;
+        deviceConfig.noFixedSizedCallback = MA_TRUE;     
     }
 #endif
 
