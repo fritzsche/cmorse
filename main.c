@@ -566,9 +566,11 @@ void process_options(int argc, char **argv, config_type *conf)
         case 's':
             conf->mode = STRAIGHT_KEY;
             break;
+#ifdef _WIN64            
         case 'x':
             conf->wasapi_exclusive = 1;
             break;
+#endif            
         case '?':
             break;
         }

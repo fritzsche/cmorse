@@ -104,6 +104,8 @@ void *coreMIDI;
 typedef void (*MIDIPacketListCallback)(const void *pktlist, void *readProcRefCon, void *srcConnRefCon);
 typedef void (*MIDIRCVCallback)(const MIDIPacketList *pktlist, void *readProcRefCon, void *srcConnRefCon);
 
+OSStatus (*MyMIDIObjectGetStringProperty)(MIDIObjectRef obj, CFStringRef propertyID, CFStringRef __nullable *__nonnull str);
+
 OSStatus (*MyMIDIClientCreate)(CFStringRef name, MIDINotifyProc __nullable notifyProc, void *__nullable notifyRefCon, MIDIClientRef *outClient);
 OSStatus (*MyMIDIInputPortCreate)(MIDIClientRef client, CFStringRef portName, MIDIReadProc readProc, void *__nullable refCon, MIDIPortRef *outPort);
 CFStringRef (*MyCFStringCreateWithCString)(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding);
@@ -260,6 +262,10 @@ int open_midi(void *p_key_state)
     MyMIDIGetSource = dlsym(coreMIDI, "MIDIGetSource");
     MyMIDIPortConnectSource = dlsym(coreMIDI, "MIDIPortConnectSource");
     MyMIDIGetNumberOfSources = dlsym(coreMIDI, "MIDIGetNumberOfSources");
+    MyMIDIObjectGetStringProperty = dlsym(coreMIDI, "MIDIObjectGetStringProperty");
+
+    CFStringRef *MykMIDIPropertyName = dlsym(coreMIDI, "kMIDIPropertyName");
+
     dlclose(coreMIDI);
 
     CFStringRef client_name = MyCFStringCreateWithCString(NULL, "MIDI Client", kCFStringEncodingMacRoman);
@@ -277,6 +283,14 @@ int open_midi(void *p_key_state)
         printf("No MIDI sources found.\n");
         return 1;
     }
+
+ //   CFStringRef name = NULL;
+ //   OSStatus status = MyMIDIObjectGetStringProperty(0, *(MykMIDIPropertyName), &name);
+ //   if (status != noErr)
+ //   {
+  //      printf("Error retrieving name for device %d.\n", 0);
+  //      return 1;
+  //  }
 
     MIDIEndpointRef source = MyMIDIGetSource(0); // use the first MIDI source
     MyMIDIPortConnectSource(inputPort, source, NULL);
