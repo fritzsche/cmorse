@@ -2,10 +2,10 @@
 
 // Only Linux and Mac have library
 #if defined(__linux__) || defined(__APPLE__)
-  #include <dlfcn.h>
+#include <dlfcn.h>
 #else // Windows
-  #include <windows.h>
-  #include <mmsystem.h>
+#include <windows.h>
+#include <mmsystem.h>
 #endif
 
 #include "midi.h"
@@ -29,9 +29,9 @@ void update_keyer(int byte0, int byte1, key_state_type *p_key)
         break;
     case MIDI_NOTE_OFF:
         if (byte1 == MIDI_DIT)
-            atomic_store(&(p_key->state[DIT]),  UNSET);
+            atomic_store(&(p_key->state[DIT]), UNSET);
         else
-            atomic_store(&(p_key->state[DAH]),  UNSET);
+            atomic_store(&(p_key->state[DAH]), UNSET);
         break;
     }
 }
@@ -86,8 +86,7 @@ void *midiinfunction(void *arg)
             errormessage("Problem reading MIDI input: %s", my_snd_strerror(status));
         }
 
-        update_keyer(buffer[0],buffer[1],parameter->p_key);
-
+        update_keyer(buffer[0], buffer[1], parameter->p_key);
     }
 
     return NULL;
@@ -118,7 +117,8 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
     key_state_type *key = (key_state_type *)readProcRefCon;
     for (UInt32 i = 0; i < pktlist->numPackets; i++)
     {
-        if (packet->length > 2) update_keyer(packet->data[0],packet->data[1],key);
+        if (packet->length > 2)
+            update_keyer(packet->data[0], packet->data[1], key);
         packet = MIDIPacketNext(packet);
     }
 }
@@ -128,51 +128,73 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
 #ifdef _WIN64
 typedef UINT (*midiInGetNumDevs_proc)(void);
 typedef MMRESULT (*midiInOpen_proc)(LPHMIDIIN phmi, UINT uDeviceID, DWORD_PTR dwCallback, DWORD_PTR dwInstance, DWORD fdwOpen);
-typedef MMRESULT (*midiInStart_PROC)(HMIDIIN hmi);
+typedef MMRESULT (*midiInStart_proc)(HMIDIIN hmi);
+typedef MMRESULT (*midiInGetDevCaps_proc)(UINT uDeviceID, LPMIDIINCAPS pmic, UINT cbmic);
 
 void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD_PTR dwParam1, DWORD_PTR dwParam2)
 {
-    key_state_type *p_key = (key_state_type* )dwInstance;
-    if (wMsg == MIM_DATA) {
-      update_keyer(dwParam1 & 0xf0,dwParam1>>8 & 0xff,p_key);
-    }    
+    key_state_type *p_key = (key_state_type *)dwInstance;
+    if (wMsg == MIM_DATA)
+    {
+        update_keyer(dwParam1 & 0xf0, dwParam1 >> 8 & 0xff, p_key);
+    }
 }
 
 #endif
 int open_midi(void *p_key_state)
 {
 #ifdef _WIN64
-  HMIDIIN hMidiDevice = NULL;
-  DWORD nMidiPort = 0;
-  UINT nMidiDeviceNum;
-  MMRESULT rv;
-  HMODULE winmm = (ma_handle)LoadLibrary("winmm.dll");
-  if (winmm == NULL) {
-    fprintf(stderr,"Error loading winmm\n");
-    exit(-1);
-  }
-  
-  midiInGetNumDevs_proc my_midiInGetNumDevs = (midiInGetNumDevs_proc) GetProcAddress(winmm, "midiInGetNumDevs");
-  midiInOpen_proc my_midiInOpen = (midiInOpen_proc) GetProcAddress(winmm, "midiInOpen");
-  midiInStart_PROC my_midiInStart = (midiInStart_PROC) GetProcAddress(winmm, "midiInStart");
+    MIDIINCAPS mic;
+    HMIDIIN hMidiDevice = NULL;
+    DWORD nMidiPort = 0;
+    UINT nMidiDeviceNum;
+    MMRESULT rv;
+    HMODULE winmm = (ma_handle)LoadLibrary("winmm.dll");
+    if (winmm == NULL)
+    {
+        fprintf(stderr, "Error loading winmm\n");
+        exit(-1);
+    }
 
-	nMidiDeviceNum = my_midiInGetNumDevs();
-	if (nMidiDeviceNum == 0) {
-		fprintf(stderr, "No Midi device found.\n");
-		exit(-1);
-	}
-    printf("Number of midi devices: %i \n",nMidiDeviceNum);
+#define STR_VALUE(arg) #arg
+#define FUNCTION_NAME(name) STR_VALUE(name)
+#define MIDI_CAPS FUNCTION_NAME(midiInGetDevCaps)
 
-	rv = my_midiInOpen(&hMidiDevice, nMidiPort, (DWORD_PTR)(void*)MidiInProc, (DWORD_PTR)p_key_state, CALLBACK_FUNCTION);
-	if (rv != MMSYSERR_NOERROR) {
-		fprintf(stderr, "midiInOpen() failed...rv=%d", rv);
-		return -1;
-	}
-	rv = my_midiInStart(hMidiDevice);
-	if (rv != MMSYSERR_NOERROR) {
-		fprintf(stderr, "midiInStart() failed...rv=%d", rv);
-		return -1;
-	}    
+    midiInGetNumDevs_proc my_midiInGetNumDevs = (midiInGetNumDevs_proc)GetProcAddress(winmm, "midiInGetNumDevs");
+    midiInOpen_proc my_midiInOpen = (midiInOpen_proc)GetProcAddress(winmm, "midiInOpen");
+    midiInStart_proc my_midiInStart = (midiInStart_proc)GetProcAddress(winmm, "midiInStart");
+    midiInGetDevCaps_proc my_midiInGetDevCaps = (midiInGetDevCaps_proc)GetProcAddress(winmm, MIDI_CAPS);
+
+    nMidiDeviceNum = my_midiInGetNumDevs();
+    if (nMidiDeviceNum == 0)
+    {
+        fprintf(stderr, "No Midi device found.\n");
+        exit(-1);
+    }
+    printf("Number of midi devices: %i \n", nMidiDeviceNum);
+
+    for (int i = 0; i < nMidiDeviceNum; i++)
+    {
+        /* Get info about the next device */
+        if (!my_midiInGetDevCaps(i, &mic, sizeof(MIDIINCAPS)))
+        {
+            /* Display its Device ID and name */
+            printf("Device ID #%u: %s\r\n", i, mic.szPname);
+        }
+    }
+
+    rv = my_midiInOpen(&hMidiDevice, nMidiPort, (DWORD_PTR)(void *)MidiInProc, (DWORD_PTR)p_key_state, CALLBACK_FUNCTION);
+    if (rv != MMSYSERR_NOERROR)
+    {
+        fprintf(stderr, "midiInOpen() failed...rv=%d", rv);
+        return -1;
+    }
+    rv = my_midiInStart(hMidiDevice);
+    if (rv != MMSYSERR_NOERROR)
+    {
+        fprintf(stderr, "midiInStart() failed...rv=%d", rv);
+        return -1;
+    }
 
 #endif
 

@@ -503,7 +503,7 @@ void help()
     printf("       Straight key mode.\n\n");
 #ifdef _WIN64
     printf("   -x --exclusive\n");
-    printf("       Use the WASAPI exclusive mode.\n\n");
+    printf("       Use the WASAPI exclusive mode. **Experimental** \n\n");
 #endif
     printf("   -h\n");
     printf("       Print this help text.\n\n\n");
@@ -632,7 +632,7 @@ int main(int argc, char **argv)
         deviceConfig.playback.shareMode = ma_share_mode_exclusive;
         deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
         deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
-    //    deviceConfig.noClip = MA_TRUE;
+        deviceConfig.noClip = MA_TRUE;
         deviceConfig.noFixedSizedCallback = MA_TRUE;     
     }
 #endif
