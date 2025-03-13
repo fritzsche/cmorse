@@ -611,7 +611,11 @@ int main(int argc, char **argv)
 
     process_options(argc, argv, &conf);
 
-    open_midi(&userData.key);
+    int status = open_midi(&userData.key);
+    if (!(status == 0)) {
+        printf("Error initializing midi.\n");
+        exit(1);
+    }
 
     context_config = ma_context_config_init();
     context_config.threadPriority = ma_thread_priority_realtime;

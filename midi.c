@@ -110,6 +110,7 @@ OSStatus (*MyMIDIClientCreate)(CFStringRef name, MIDINotifyProc __nullable notif
 OSStatus (*MyMIDIInputPortCreate)(MIDIClientRef client, CFStringRef portName, MIDIReadProc readProc, void *__nullable refCon, MIDIPortRef *outPort);
 CFStringRef (*MyCFStringCreateWithCString)(CFAllocatorRef alloc, const char *cStr, CFStringEncoding encoding);
 OSStatus (*MyMIDIPortConnectSource)(MIDIPortRef port, MIDIEndpointRef source, void *__nullable connRefCon);
+Boolean (*MyCFStringGetCString)(CFStringRef theString, char *buffer, CFIndex bufferSize, CFStringEncoding encoding);
 int (*MyMIDIGetSource)(ItemCount sourceIndex0);
 ItemCount (*MyMIDIGetNumberOfSources)(void);
 
@@ -263,8 +264,8 @@ int open_midi(void *p_key_state)
     MyMIDIPortConnectSource = dlsym(coreMIDI, "MIDIPortConnectSource");
     MyMIDIGetNumberOfSources = dlsym(coreMIDI, "MIDIGetNumberOfSources");
     MyMIDIObjectGetStringProperty = dlsym(coreMIDI, "MIDIObjectGetStringProperty");
-
     CFStringRef *MykMIDIPropertyName = dlsym(coreMIDI, "kMIDIPropertyName");
+    MyCFStringGetCString = dlsym(coreMIDI, "CFStringGetCString");
 
     dlclose(coreMIDI);
 
@@ -284,13 +285,26 @@ int open_midi(void *p_key_state)
         return 1;
     }
 
- //   CFStringRef name = NULL;
- //   OSStatus status = MyMIDIObjectGetStringProperty(0, *(MykMIDIPropertyName), &name);
- //   if (status != noErr)
- //   {
-  //      printf("Error retrieving name for device %d.\n", 0);
-  //      return 1;
-  //  }
+    CFStringRef name = NULL;
+    //  MIDIEndpointRef source = MyMIDIGetSource(0);
+    printf("%lu available MIDI source(s)\n", numOfSources );
+    for (int i = 0; i < numOfSources; i++)
+    {
+        char cName[128];
+        MIDIEndpointRef endpoint = MyMIDIGetSource(i);
+        OSStatus status = MyMIDIObjectGetStringProperty(endpoint, *(MykMIDIPropertyName), &name);
+        if (status != noErr)
+        {
+            printf("Error retrieving name for device %d.\n", i);
+            continue;
+        }
+        if (!MyCFStringGetCString(name, cName, sizeof(cName), kCFStringEncodingUTF8))
+        {
+            printf("Error converting name for device %d.\n", i);
+            continue;
+        }
+        printf("  Device %d: %s \n", i, cName);
+    }
 
     MIDIEndpointRef source = MyMIDIGetSource(0); // use the first MIDI source
     MyMIDIPortConnectSource(inputPort, source, NULL);
