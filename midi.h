@@ -7,6 +7,7 @@
 #define MIDI_DIT 0x30
 #define MIDI_DAH 0x32
 
-int open_midi(void *);
+int open_midi(void *,int);
+int list_midi();
 
 #endif 

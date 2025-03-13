@@ -144,7 +144,71 @@ void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD
 }
 
 #endif
-int open_midi(void *p_key_state)
+
+int list_midi()
+{
+#if defined(__APPLE__)
+    // dynamic load CoreMidi
+    coreMIDI = dlopen("/System/Library/Frameworks/CoreMIDI.framework/CoreMIDI", RTLD_NOW);
+    if (!coreMIDI)
+    {
+        fprintf(stderr, "Error loading CoreMIDI: %s\n", dlerror());
+        return 1;
+    }
+
+   // MyMIDIClientCreate = dlsym(coreMIDI, "MIDIClientCreate");
+   // MyMIDIInputPortCreate = dlsym(coreMIDI, "MIDIInputPortCreate");
+    MyCFStringCreateWithCString = dlsym(coreMIDI, "CFStringCreateWithCString");
+    MyMIDIGetSource = dlsym(coreMIDI, "MIDIGetSource");
+    MyMIDIPortConnectSource = dlsym(coreMIDI, "MIDIPortConnectSource");
+    MyMIDIGetNumberOfSources = dlsym(coreMIDI, "MIDIGetNumberOfSources");
+    MyMIDIObjectGetStringProperty = dlsym(coreMIDI, "MIDIObjectGetStringProperty");
+    CFStringRef *MykMIDIPropertyName = dlsym(coreMIDI, "kMIDIPropertyName");
+    MyCFStringGetCString = dlsym(coreMIDI, "CFStringGetCString");
+
+    dlclose(coreMIDI);
+
+    CFStringRef client_name = MyCFStringCreateWithCString(NULL, "MIDI Client", kCFStringEncodingMacRoman);
+    CFStringRef port_name = MyCFStringCreateWithCString(NULL, "Input Port", kCFStringEncodingMacRoman);
+
+    MIDIClientRef client;
+    // MyMIDIClientCreate(client_name, NULL, NULL, &client);
+
+    // MIDIPortRef inputPort;
+
+    // MyMIDIInputPortCreate(client, port_name, MyMIDIReadProc, p_key_state, &inputPort);
+    ItemCount numOfSources = MyMIDIGetNumberOfSources();
+    if (numOfSources == 0)
+    {
+        printf("No MIDI sources found.\n");
+        return 1;
+    }
+
+    CFStringRef name = NULL;
+    printf("%lu available MIDI source(s)\n", numOfSources);
+    for (int i = 0; i < numOfSources; i++)
+    {
+        char cName[128];
+        MIDIEndpointRef endpoint = MyMIDIGetSource(i);
+        OSStatus status = MyMIDIObjectGetStringProperty(endpoint, *(MykMIDIPropertyName), &name);
+        if (status != noErr)
+        {
+            printf("Error retrieving name for device %d.\n", i);
+            continue;
+        }
+        if (!MyCFStringGetCString(name, cName, sizeof(cName), kCFStringEncodingUTF8))
+        {
+            printf("Error converting name for device %d.\n", i);
+            continue;
+        }
+        printf("  %d: %s \n", i, cName);
+    }
+
+#endif
+    return 0;
+}
+
+int open_midi(void *p_key_state, int midi_device)
 {
 #ifdef _WIN64
     MIDIINCAPS mic;
@@ -285,9 +349,14 @@ int open_midi(void *p_key_state)
         return 1;
     }
 
+    if (midi_device < 0 || midi_device >= numOfSources)
+    {
+        printf("MIDI source device does not exist.\n");
+        return 1;
+    }
+/*
     CFStringRef name = NULL;
-    //  MIDIEndpointRef source = MyMIDIGetSource(0);
-    printf("%lu available MIDI source(s)\n", numOfSources );
+    printf("%lu available MIDI source(s)\n", numOfSources);
     for (int i = 0; i < numOfSources; i++)
     {
         char cName[128];
@@ -305,8 +374,9 @@ int open_midi(void *p_key_state)
         }
         printf("  Device %d: %s \n", i, cName);
     }
-
-    MIDIEndpointRef source = MyMIDIGetSource(0); // use the first MIDI source
+        */
+    printf("Midi Device selected: %d\n", midi_device);
+    MIDIEndpointRef source = MyMIDIGetSource(midi_device); // use the first MIDI source
     MyMIDIPortConnectSource(inputPort, source, NULL);
 
     printf("Listening for MIDI events...\n");

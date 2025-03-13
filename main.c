@@ -22,7 +22,7 @@
 
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
-#define DEVICE_SAMPLE_RATE 48000
+// #define DEVICE_SAMPLE_RATE 48000
 #define DEVICE_FRAMES 128
 
 #define SIN_FREQ 500
@@ -92,6 +92,8 @@ void output_dit_dah(dit_dah_buffer_type *b)
         convert_and_print_morse(b->dit_dah);
     init_dit_dah(b);
 }
+
+bool list_device = false;
 
 #define DECODER_SPEED_BUFFER_SIZE 10
 
@@ -487,7 +489,7 @@ void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, 
 
 void help()
 {
-    printf("cmorse [-w wpm] [-f frequency] [-p frames per package] [-h]\n\n");
+    printf("cmorse [-w wpm] [-f frequency] [-p frames per package] [-h] [-m device]\n\n");
     printf("   -w wpm --wpm wpm\n");
     printf("       Specify the speed of the keyer in words per minute(wpm).\n");
     printf("       The default speed is %dwpm.\n\n", DEFAULT_WPM);
@@ -499,6 +501,15 @@ void help()
     printf("       once by the audio subsystem. Typical values are 32,64 or 128 frames\n");
     printf("       The smaller the number of frames the lower the latency.\n");
     printf("       Default value for the number of frames is %d frames.\n\n", DEVICE_FRAMES);
+    printf("   -l --list\n");
+    printf("       List all the available midi source devices and audio devices\n\n");
+#if defined(__APPLE__)
+    printf("   -m device --midi device\n");
+    printf("       Use specified midi source device\n\n");
+    printf("   -a device --audio device\n");
+    printf("       Use specified audio device for output.\n\n");
+#endif
+
     printf("   -s --straight\n");
     printf("       Straight key mode.\n\n");
 #ifdef _WIN64
@@ -511,10 +522,12 @@ void help()
 
 typedef struct config_data
 {
-    int wpm;       // words per minutes
-    int frequency; // frequency of sidetone
-    int frames;    // frames in a audiobuffer
-    char mode;     // keyer mode: Staight / Iambic B
+    int wpm;          // words per minutes
+    int frequency;    // frequency of sidetone
+    int frames;       // frames in a audiobuffer
+    char mode;        // keyer mode: Staight / Iambic B
+    int midi_device;  // device number of the source midi device
+    int audio_device; // device number of the source audio device
 #ifdef _WIN64
     boolean wasapi_exclusive; // Use the wasapi exclusive mode
 #endif
@@ -531,6 +544,8 @@ void process_options(int argc, char **argv, config_type *conf)
     conf->wpm = DEFAULT_WPM;
     conf->frequency = SIN_FREQ;
     conf->mode = IAMBIC_B;
+    conf->midi_device = 0;
+    conf->audio_device = -1;
 #ifdef _WIN64
     conf->wasapi_exclusive = 0;
 #endif
@@ -542,10 +557,13 @@ void process_options(int argc, char **argv, config_type *conf)
         {"package", required_argument, NULL, 'p'},
         {"straight", no_argument, NULL, 's'},
         {"exclusive", no_argument, NULL, 'x'},
+        {"list", no_argument, NULL, 'l'},
+        {"midi", required_argument, NULL, 'm'},
+        {"audio", required_argument, NULL, 'a'},
         {"help", no_argument, NULL, 'h'},
 
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:hsx",
+    while ((c = getopt_long(argc, argv, "w:f:p:m:lhsx",
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -566,15 +584,61 @@ void process_options(int argc, char **argv, config_type *conf)
         case 's':
             conf->mode = STRAIGHT_KEY;
             break;
-#ifdef _WIN64            
+#ifdef _WIN64
         case 'x':
             conf->wasapi_exclusive = 1;
             break;
-#endif            
+#endif
+        case 'm':
+            conf->midi_device = atoi(optarg);
+            break;
+        case 'a':
+            conf->audio_device = atoi(optarg);
+            break;
+        case 'l':
+            list_device = true;
+            break;
         case '?':
             break;
         }
     }
+}
+
+int list_audio()
+{
+    ma_result result;
+    ma_context context;
+    ma_uint32 iDevice;
+    ma_device_info *pPlaybackDeviceInfos;
+    ma_uint32 playbackDeviceCount;
+    ma_device_info *pCaptureDeviceInfos;
+    ma_uint32 captureDeviceCount;
+
+    if (ma_context_init(NULL, 0, NULL, &context) != MA_SUCCESS)
+    {
+        printf("Failed to initialize context.\n");
+        return -2;
+    }
+    result = ma_context_get_devices(&context, &pPlaybackDeviceInfos, &playbackDeviceCount, &pCaptureDeviceInfos, &captureDeviceCount);
+    if (result != MA_SUCCESS)
+    {
+        printf("Failed to retrieve device information.\n");
+        return -3;
+    }
+    printf("%d Audio Playback Devices\n", playbackDeviceCount);
+    for (iDevice = 0; iDevice < playbackDeviceCount; ++iDevice)
+    {
+        printf("  %u: %s", iDevice, pPlaybackDeviceInfos[iDevice].name);
+        if (pPlaybackDeviceInfos[iDevice].isDefault)
+            printf(" [DEFAULT]\n");
+        else
+            printf("\n");
+        /*  for(int i=0;i<pPlaybackDeviceInfos[iDevice].nativeDataFormatCount;i++) {
+               printf("    %i: %s\n", i, pPlaybackDeviceInfos[iDevice].nativeDataFormats[i].channels);
+           }*/
+    }
+
+    return 0;
 }
 
 int main(int argc, char **argv)
@@ -606,13 +670,24 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERR: int is not a atomic type on this platform.");
         return (-1);
     }
+
     // sort the morse decoder map so that bsearch can be used
     init_morse_map();
 
     process_options(argc, argv, &conf);
 
-    int status = open_midi(&userData.key);
-    if (!(status == 0)) {
+    if (list_device == true)
+    {
+        if (list_midi() != 0)
+            return -1;
+        if (list_audio() != 0)
+            return -1;
+        return 0;
+    }
+
+    int status = open_midi(&userData.key, conf.midi_device);
+    if (!(status == 0))
+    {
         printf("Error initializing midi.\n");
         exit(1);
     }
@@ -627,10 +702,23 @@ int main(int argc, char **argv)
     }
 
     deviceConfig = ma_device_config_init(ma_device_type_playback);
+
+    if (conf.audio_device != -1)
+    {
+        ma_device_info *pPlaybackInfos;
+        ma_uint32 playbackCount;
+        ma_device_info *pCaptureInfos;
+        ma_uint32 captureCount;
+        if (ma_context_get_devices(&context, &pPlaybackInfos, &playbackCount, &pCaptureInfos, &captureCount) != MA_SUCCESS)
+        {
+            printf("Failed to initialize context.\n");
+        }
+        deviceConfig.playback.pDeviceID = &pPlaybackInfos[conf.audio_device].id;
+    }
+
     deviceConfig.playback.format = DEVICE_FORMAT;
     deviceConfig.playback.channels = DEVICE_CHANNELS;
-
-   
+    deviceConfig.performanceProfile = ma_performance_profile_low_latency;
 
 #ifdef _WIN64
     if (conf.wasapi_exclusive)
@@ -639,7 +727,7 @@ int main(int argc, char **argv)
         deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
         deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
         deviceConfig.noClip = MA_TRUE;
-        deviceConfig.noFixedSizedCallback = MA_TRUE;     
+        deviceConfig.noFixedSizedCallback = MA_TRUE;
     }
 #endif
 
