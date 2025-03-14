@@ -7,7 +7,7 @@ enable_testing()
 add_executable(cmorse main.c blackman.c midi.c morse.c)
 
 if(UNIX AND NOT APPLE)
-TARGET_LINK_LIBRARIES(cmorse m)
+TARGET_LINK_LIBRARIES(cmorse m asound)
 endif ()
 
 set(CPACK_PROJECT_NAME ${PROJECT_NAME})

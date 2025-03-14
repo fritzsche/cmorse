@@ -28,7 +28,7 @@
 #define DEVICE_FRAMES 128
 
 #define SIN_FREQ 500
-#define SIN_AMP 0.8
+#define SIN_AMP 0.2
 #define DEFAULT_WPM 25
 
 #define RING_BUFFER_SIZE 1024
@@ -543,7 +543,7 @@ int process_options(int argc, char **argv, config_type *conf)
     conf->wpm = DEFAULT_WPM;
     conf->frequency = SIN_FREQ;
     conf->mode = IAMBIC_B;
-    conf->midi_device = 0;
+    conf->midi_device = -1;
     conf->audio_device = -1;
 #ifdef _WIN64
     conf->wasapi_exclusive = 0;
