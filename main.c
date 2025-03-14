@@ -726,9 +726,9 @@ int main(int argc, char **argv)
     {
         deviceConfig.playback.shareMode = ma_share_mode_exclusive;
         deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
-//        deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
-//        deviceConfig.noClip = MA_TRUE;
-//        deviceConfig.noFixedSizedCallback = MA_TRUE;
+        deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
+        deviceConfig.noClip = MA_TRUE;
+        deviceConfig.noFixedSizedCallback = MA_TRUE;
     }
 #endif
 
