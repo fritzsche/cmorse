@@ -10,6 +10,8 @@
 #include <time.h>
 #include <stdint.h>
 
+#include <stdbool.h>
+
 #include <pthread.h>
 #ifdef _WIN64
 #include <windows.h>
@@ -18,7 +20,7 @@
 // #include <unistd.h>    /* for getopt */
 #include <getopt.h>
 
-#define VERSION "0.1"
+#define VERSION "0.2"
 
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
@@ -503,13 +505,10 @@ void help()
     printf("       Default value for the number of frames is %d frames.\n\n", DEVICE_FRAMES);
     printf("   -l --list\n");
     printf("       List all the available midi source devices and audio devices\n\n");
-#if defined(__APPLE__)
     printf("   -m device --midi device\n");
     printf("       Use specified midi source device\n\n");
     printf("   -a device --audio device\n");
     printf("       Use specified audio device for output.\n\n");
-#endif
-
     printf("   -s --straight\n");
     printf("       Straight key mode.\n\n");
 #ifdef _WIN64
@@ -525,7 +524,7 @@ typedef struct config_data
     int wpm;          // words per minutes
     int frequency;    // frequency of sidetone
     int frames;       // frames in a audiobuffer
-    char mode;        // keyer mode: Staight / Iambic B
+    char mode;        // keyer mode: Straight / Iambic B
     int midi_device;  // device number of the source midi device
     int audio_device; // device number of the source audio device
 #ifdef _WIN64
@@ -533,7 +532,7 @@ typedef struct config_data
 #endif
 } config_type;
 
-void process_options(int argc, char **argv, config_type *conf)
+int process_options(int argc, char **argv, config_type *conf)
 {
     // Parameter option
     int c;
@@ -563,7 +562,7 @@ void process_options(int argc, char **argv, config_type *conf)
         {"help", no_argument, NULL, 'h'},
 
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:m:lhsx",
+    while ((c = getopt_long(argc, argv, "w:f:p:m:a:lhsx",
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -599,9 +598,11 @@ void process_options(int argc, char **argv, config_type *conf)
             list_device = true;
             break;
         case '?':
+            return -1;
             break;
         }
     }
+    return 0;
 }
 
 int list_audio()
@@ -674,7 +675,7 @@ int main(int argc, char **argv)
     // sort the morse decoder map so that bsearch can be used
     init_morse_map();
 
-    process_options(argc, argv, &conf);
+    if ( process_options(argc, argv, &conf) != 0) return -1;
 
     if (list_device == true)
     {
@@ -725,9 +726,9 @@ int main(int argc, char **argv)
     {
         deviceConfig.playback.shareMode = ma_share_mode_exclusive;
         deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
-        deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
-        deviceConfig.noClip = MA_TRUE;
-        deviceConfig.noFixedSizedCallback = MA_TRUE;
+//        deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
+//        deviceConfig.noClip = MA_TRUE;
+//        deviceConfig.noFixedSizedCallback = MA_TRUE;
     }
 #endif
 

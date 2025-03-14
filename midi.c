@@ -129,6 +129,9 @@ void MyMIDIReadProc(const MIDIPacketList *pktlist, void *readProcRefCon, void *s
 #endif
 
 #ifdef _WIN64
+#define STR_VALUE(arg) #arg
+#define FUNCTION_NAME(name) STR_VALUE(name)
+#define MIDI_CAPS FUNCTION_NAME(midiInGetDevCaps)
 typedef UINT (*midiInGetNumDevs_proc)(void);
 typedef MMRESULT (*midiInOpen_proc)(LPHMIDIIN phmi, UINT uDeviceID, DWORD_PTR dwCallback, DWORD_PTR dwInstance, DWORD fdwOpen);
 typedef MMRESULT (*midiInStart_proc)(HMIDIIN hmi);
@@ -147,6 +150,39 @@ void CALLBACK MidiInProc(HMIDIIN hMidiIn, UINT wMsg, DWORD_PTR dwInstance, DWORD
 
 int list_midi()
 {
+#ifdef _WIN64
+    UINT nMidiDeviceNum;
+    MIDIINCAPS mic;
+
+    HMODULE winmm = (ma_handle)LoadLibrary("winmm.dll");
+    if (winmm == NULL)
+    {
+        fprintf(stderr, "Error loading winmm\n");
+        exit(-1);
+    }
+
+    midiInGetNumDevs_proc my_midiInGetNumDevs = (midiInGetNumDevs_proc)GetProcAddress(winmm, "midiInGetNumDevs");
+    midiInOpen_proc my_midiInOpen = (midiInOpen_proc)GetProcAddress(winmm, "midiInOpen");
+    midiInStart_proc my_midiInStart = (midiInStart_proc)GetProcAddress(winmm, "midiInStart");
+    midiInGetDevCaps_proc my_midiInGetDevCaps = (midiInGetDevCaps_proc)GetProcAddress(winmm, MIDI_CAPS);
+    nMidiDeviceNum = my_midiInGetNumDevs();    
+    if (nMidiDeviceNum == 0)
+    {
+        fprintf(stderr, "No Midi device found.\n");
+        return -1;
+    }
+    printf("%lu available MIDI device(s)\n", nMidiDeviceNum);
+    for (int i = 0; i < nMidiDeviceNum; i++)
+    {
+        /* Get info about the next device */
+        if (!my_midiInGetDevCaps(i, &mic, sizeof(MIDIINCAPS)))
+        {
+            /* Display its Device ID and name */
+            printf("  #%u: %s\r\n", i, mic.szPname);
+        }
+    }
+#endif
+
 #if defined(__APPLE__)
     // dynamic load CoreMidi
     coreMIDI = dlopen("/System/Library/Frameworks/CoreMIDI.framework/CoreMIDI", RTLD_NOW);
@@ -156,8 +192,8 @@ int list_midi()
         return 1;
     }
 
-   // MyMIDIClientCreate = dlsym(coreMIDI, "MIDIClientCreate");
-   // MyMIDIInputPortCreate = dlsym(coreMIDI, "MIDIInputPortCreate");
+    // MyMIDIClientCreate = dlsym(coreMIDI, "MIDIClientCreate");
+    // MyMIDIInputPortCreate = dlsym(coreMIDI, "MIDIInputPortCreate");
     MyCFStringCreateWithCString = dlsym(coreMIDI, "CFStringCreateWithCString");
     MyMIDIGetSource = dlsym(coreMIDI, "MIDIGetSource");
     MyMIDIPortConnectSource = dlsym(coreMIDI, "MIDIPortConnectSource");
@@ -217,15 +253,14 @@ int open_midi(void *p_key_state, int midi_device)
     UINT nMidiDeviceNum;
     MMRESULT rv;
     HMODULE winmm = (ma_handle)LoadLibrary("winmm.dll");
+
+    if (midi_device >= 0) nMidiPort = midi_device;
+
     if (winmm == NULL)
     {
         fprintf(stderr, "Error loading winmm\n");
         exit(-1);
     }
-
-#define STR_VALUE(arg) #arg
-#define FUNCTION_NAME(name) STR_VALUE(name)
-#define MIDI_CAPS FUNCTION_NAME(midiInGetDevCaps)
 
     midiInGetNumDevs_proc my_midiInGetNumDevs = (midiInGetNumDevs_proc)GetProcAddress(winmm, "midiInGetNumDevs");
     midiInOpen_proc my_midiInOpen = (midiInOpen_proc)GetProcAddress(winmm, "midiInOpen");
@@ -239,16 +274,16 @@ int open_midi(void *p_key_state, int midi_device)
         exit(-1);
     }
     printf("Number of midi devices: %i \n", nMidiDeviceNum);
-
-    for (int i = 0; i < nMidiDeviceNum; i++)
+/*    for (int i = 0; i < nMidiDeviceNum; i++)
     {
-        /* Get info about the next device */
+        // Get info about the next device 
         if (!my_midiInGetDevCaps(i, &mic, sizeof(MIDIINCAPS)))
         {
-            /* Display its Device ID and name */
+            // Display its Device ID and name 
             printf("Device ID #%u: %s\r\n", i, mic.szPname);
         }
     }
+    */
 
     rv = my_midiInOpen(&hMidiDevice, nMidiPort, (DWORD_PTR)(void *)MidiInProc, (DWORD_PTR)p_key_state, CALLBACK_FUNCTION);
     if (rv != MMSYSERR_NOERROR)
@@ -354,27 +389,27 @@ int open_midi(void *p_key_state, int midi_device)
         printf("MIDI source device does not exist.\n");
         return 1;
     }
-/*
-    CFStringRef name = NULL;
-    printf("%lu available MIDI source(s)\n", numOfSources);
-    for (int i = 0; i < numOfSources; i++)
-    {
-        char cName[128];
-        MIDIEndpointRef endpoint = MyMIDIGetSource(i);
-        OSStatus status = MyMIDIObjectGetStringProperty(endpoint, *(MykMIDIPropertyName), &name);
-        if (status != noErr)
+    /*
+        CFStringRef name = NULL;
+        printf("%lu available MIDI source(s)\n", numOfSources);
+        for (int i = 0; i < numOfSources; i++)
         {
-            printf("Error retrieving name for device %d.\n", i);
-            continue;
+            char cName[128];
+            MIDIEndpointRef endpoint = MyMIDIGetSource(i);
+            OSStatus status = MyMIDIObjectGetStringProperty(endpoint, *(MykMIDIPropertyName), &name);
+            if (status != noErr)
+            {
+                printf("Error retrieving name for device %d.\n", i);
+                continue;
+            }
+            if (!MyCFStringGetCString(name, cName, sizeof(cName), kCFStringEncodingUTF8))
+            {
+                printf("Error converting name for device %d.\n", i);
+                continue;
+            }
+            printf("  Device %d: %s \n", i, cName);
         }
-        if (!MyCFStringGetCString(name, cName, sizeof(cName), kCFStringEncodingUTF8))
-        {
-            printf("Error converting name for device %d.\n", i);
-            continue;
-        }
-        printf("  Device %d: %s \n", i, cName);
-    }
-        */
+            */
     printf("Midi Device selected: %d\n", midi_device);
     MIDIEndpointRef source = MyMIDIGetSource(midi_device); // use the first MIDI source
     MyMIDIPortConnectSource(inputPort, source, NULL);
