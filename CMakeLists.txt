@@ -4,7 +4,7 @@ project(cmake VERSION 0.1.0 LANGUAGES C)
 include(CTest)
 enable_testing()
 
-add_executable(cmorse main.c blackman.c midi.c morse.c)
+add_executable(cmorse main.c blackman.c midi.c morse.c serial.c) 
 
 if(UNIX AND NOT APPLE)
 TARGET_LINK_LIBRARIES(cmorse m asound)

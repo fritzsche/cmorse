@@ -10,6 +10,7 @@
 #endif
 
 #include "midi.h"
+#include "serial.h"
 #include "morse.h"
 
 void update_keyer(int byte0, int byte1, key_state_type *p_key)
@@ -422,6 +423,9 @@ int list_midi()
     ItemCount numOfSources = MyMIDIGetNumberOfSources();
     if (numOfSources == 0)
     {
+        #ifdef SERIAL_SUPPORT
+         return 0;
+        #endif 
         printf("No MIDI sources found.\n");
         return 1;
     }

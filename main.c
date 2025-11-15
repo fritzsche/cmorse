@@ -6,6 +6,7 @@
 #include "morse.h"
 #include "blackman.h"
 #include "midi.h"
+#include "serial.h"
 
 #include <time.h>
 #include <stdint.h>
@@ -681,18 +682,26 @@ int main(int argc, char **argv)
     {
         if (list_midi() != 0)
             return -1;
+        #ifdef SERIAL_SUPPORT
+        if (list_serial() != 0)
+            return -1;
+        #endif    
         if (list_audio() != 0)
             return -1;
         return 0;
     }
 
+    #ifdef SERIAL_SUPPORT
+    int status = open_serial(&userData.key, 3);  
+    #else
     int status = open_midi(&userData.key, conf.midi_device);
+
     if (!(status == 0))
     {
         printf("Error initializing midi.\n");
         exit(1);
     }
-
+    #endif
     context_config = ma_context_config_init();
     context_config.threadPriority = ma_thread_priority_realtime;
 
