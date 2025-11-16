@@ -508,10 +508,15 @@ void help()
     printf("       List all the available midi source devices and audio devices\n\n");
     printf("   -m device --midi device\n");
     printf("       Use specified midi source device\n\n");
+#ifdef SERIAL_SUPPORT
+    printf("   -c device --serial device\n");
+    printf("       Use specified serial source device.\n\n");
+#endif
     printf("   -a device --audio device\n");
     printf("       Use specified audio device for output.\n\n");
     printf("   -s --straight\n");
     printf("       Straight key mode.\n\n");
+
 #ifdef _WIN64
     printf("   -x --exclusive\n");
     printf("       Use the WASAPI exclusive mode. **Experimental** \n\n");
@@ -522,12 +527,13 @@ void help()
 
 typedef struct config_data
 {
-    int wpm;          // words per minutes
-    int frequency;    // frequency of sidetone
-    int frames;       // frames in a audiobuffer
-    char mode;        // keyer mode: Straight / Iambic B
-    int midi_device;  // device number of the source midi device
-    int audio_device; // device number of the source audio device
+    int wpm;           // words per minutes
+    int frequency;     // frequency of sidetone
+    int frames;        // frames in a audiobuffer
+    char mode;         // keyer mode: Straight / Iambic B
+    int midi_device;   // device number of the source midi device
+    int audio_device;  // device number of the source audio device
+    int serial_device; // device number of a source serial device
 #ifdef _WIN64
     boolean wasapi_exclusive; // Use the wasapi exclusive mode
 #endif
@@ -546,6 +552,7 @@ int process_options(int argc, char **argv, config_type *conf)
     conf->mode = IAMBIC_B;
     conf->midi_device = -1;
     conf->audio_device = -1;
+    conf->serial_device = -1;    
 #ifdef _WIN64
     conf->wasapi_exclusive = 0;
 #endif
@@ -559,11 +566,14 @@ int process_options(int argc, char **argv, config_type *conf)
         {"exclusive", no_argument, NULL, 'x'},
         {"list", no_argument, NULL, 'l'},
         {"midi", required_argument, NULL, 'm'},
+#ifdef SERIAL_SUPPORT          
+        {"serial", required_argument, NULL, 'c'},
+#endif        
         {"audio", required_argument, NULL, 'a'},
         {"help", no_argument, NULL, 'h'},
 
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:m:a:lhsx",
+    while ((c = getopt_long(argc, argv, "w:f:p:m:c:a:lhsx",
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -592,6 +602,11 @@ int process_options(int argc, char **argv, config_type *conf)
         case 'm':
             conf->midi_device = atoi(optarg);
             break;
+#ifdef SERIAL_SUPPORT          
+        case 'c':
+            conf->serial_device = atoi(optarg);
+            break;
+#endif            
         case 'a':
             conf->audio_device = atoi(optarg);
             break;
@@ -676,24 +691,43 @@ int main(int argc, char **argv)
     // sort the morse decoder map so that bsearch can be used
     init_morse_map();
 
-    if ( process_options(argc, argv, &conf) != 0) return -1;
+    if (process_options(argc, argv, &conf) != 0)
+        return -1;
 
     if (list_device == true)
     {
         if (list_midi() != 0)
             return -1;
-        #ifdef SERIAL_SUPPORT
+#ifdef SERIAL_SUPPORT
         if (list_serial() != 0)
             return -1;
-        #endif    
+#endif
         if (list_audio() != 0)
             return -1;
         return 0;
     }
 
-    #ifdef SERIAL_SUPPORT
-    int status = open_serial(&userData.key, 3);  
-    #else
+#ifdef SERIAL_SUPPORT
+    if (conf.serial_device > 0)
+    {
+        int status = open_serial(&userData.key, conf.serial_device);
+        if (!(status == 0))
+        {
+            printf("Error initializing serial device.\n");
+            exit(1);
+        }
+    }
+    else
+    {
+        int status = open_midi(&userData.key, conf.midi_device);
+
+        if (!(status == 0))
+        {
+            printf("Error initializing midi.\n");
+            exit(1);
+        }
+    }
+#else
     int status = open_midi(&userData.key, conf.midi_device);
 
     if (!(status == 0))
@@ -701,7 +735,7 @@ int main(int argc, char **argv)
         printf("Error initializing midi.\n");
         exit(1);
     }
-    #endif
+#endif
     context_config = ma_context_config_init();
     context_config.threadPriority = ma_thread_priority_realtime;
 
