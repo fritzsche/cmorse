@@ -2,7 +2,7 @@
 #define SERIAL_H_
 
 #if defined(__APPLE__)
- //#define SERIAL_SUPPORT 
+ #define SERIAL_SUPPORT 
 #endif
 
 #ifdef SERIAL_SUPPORT

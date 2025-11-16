@@ -1,5 +1,5 @@
 #include "serial.h"
-
+#include "morse.h"
 #if defined(__APPLE__)
 #include <stdio.h>
 #include <string.h>
@@ -17,6 +17,12 @@ typedef struct
     char path[PORT_NAME_MAX_LEN];
     char base_name[PORT_NAME_MAX_LEN];
 } SerialPortInfo;
+
+typedef struct
+{
+    int fd;
+    key_state_type *p_key;
+} serial_parameter;
 
 /**
  * Queries all available serial devices and populates the provided array.
@@ -129,6 +135,78 @@ int poll_modem_lines(int fd, int old_status)
 void *monitor_serial(void *arg)
 {
     printf("Thread Started!");
+
+    serial_parameter *parameter;
+    parameter = (serial_parameter *)arg;
+
+    int fd = parameter->fd;
+    int old_status = 0;
+
+    key_state_type *p_key = parameter->p_key;
+
+    if (ioctl(fd, TIOCMGET, &old_status) == -1)
+    {
+        perror("ioctl TIOCMGET initial");
+        //    close(fd);
+        return NULL;
+    }
+
+    int old_dit_status = (old_status & TIOCM_CTS) ? SET : UNSET;
+    int old_dah_status = (old_status & TIOCM_CD) ? SET : UNSET;
+
+    while (1)
+    {
+        // bool did = (old_status & TIOCM_CTS) ? 1 : 0)
+
+        //    atomic_store(&(p_key->memory[DIT]), (old_status & TIOCM_CTS) ? SET:UNSET);
+        //    atomic_store(&(p_key->memory[DAH]), (old_status & TIOCM_CD) ? SET:UNSET);
+
+        int status = poll_modem_lines(fd, old_status);
+        if (status < 0)
+            break;
+        int dit_status = (status & TIOCM_CTS) ? SET : UNSET;
+        int dah_status = (status & TIOCM_CD) ? SET : UNSET;
+
+        if (dit_status != old_dit_status)
+        {
+
+            if (dit_status == SET)
+            {
+                atomic_store(&(p_key->memory[DIT]), SET);
+                atomic_store(&(p_key->state[DIT]), SET);
+            }
+            else
+            {
+                atomic_store(&(p_key->state[DIT]), UNSET);
+            }
+        }
+        if (dah_status != old_dah_status)
+        {
+            if (dah_status == SET)
+            {
+                atomic_store(&(p_key->memory[DAH]), SET);
+                atomic_store(&(p_key->state[DAH]), SET);
+            }
+            else
+            {
+                atomic_store(&(p_key->state[DAH]), UNSET);
+            }
+        }
+
+        old_dit_status = dit_status;
+        old_dah_status = dah_status;
+
+/*        if ((status & TIOCM_CD) != (old_status & TIOCM_CD))
+            printf("DCD changed to %d\n",
+                   (status & TIOCM_CD) ? 1 : 0);
+
+        if ((status & TIOCM_CTS) != (old_status & TIOCM_CTS))
+            printf("CTS changed to %d\n",
+                   (status & TIOCM_CTS) ? 1 : 0);
+*/
+        old_status = status;
+    }
+
     return NULL;
 }
 
@@ -175,6 +253,7 @@ int open_serial(void *p_key_state, int serial_device)
 {
 #if defined(__APPLE__)
     SerialPortInfo devices[MAX_PORTS];
+    serial_parameter parameter;
 
     // Query the devices
     int count = query_serial_devices(devices, MAX_PORTS);
@@ -186,10 +265,14 @@ int open_serial(void *p_key_state, int serial_device)
     }
     printf("Using serial port: %s\n", devices[serial_device - 1].path);
     int fd = open_serial_port(devices[serial_device - 1].path);
+    configure_serial_port(fd);
 
     pthread_t serialinthread;
     int status;
-    status = pthread_create(&serialinthread, NULL, monitor_serial, NULL); // midiinfunction, &midi_parameter);
+
+    parameter.fd = fd;
+    parameter.p_key = p_key_state;
+    status = pthread_create(&serialinthread, NULL, monitor_serial, &parameter);
     if (status == -1)
     {
         printf("Unable to create serial input thread.\n");

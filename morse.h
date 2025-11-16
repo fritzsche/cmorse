@@ -43,7 +43,7 @@ typedef struct key_state
 {
     // DIT/DAH Memory
     atomic_int memory[2];
-    // State of the key (pressed of not)
+    // State of the key (pressed or not)
     atomic_int state[2];
 } key_state_type;
 
