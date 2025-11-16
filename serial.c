@@ -86,8 +86,8 @@ int query_serial_devices(SerialPortInfo devices[], int max_ports)
             strncmp(ent->d_name, "tty.", 4) == 0)
 #else
         if (strncmp(ent->d_name, "ttyUSB", 6) == 0 ||
-            strncmp(ent->d_name, "ttyACM", 6) == 0 ||
-            strncmp(ent->d_name, "ttyS", 4) == 0)
+            strncmp(ent->d_name, "ttyACM", 6) == 0 ) //||
+       //     strncmp(ent->d_name, "ttyS", 4) == 0 )
 #endif
         {
             snprintf(devices[count].path, PORT_NAME_MAX_LEN, "/dev/%s", ent->d_name);
