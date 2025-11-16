@@ -363,7 +363,7 @@ int list_midi()
     if (winmm == NULL)
     {
         fprintf(stderr, "Error loading winmm\n");
-        exit(-1);
+        return -1;
     }
 
     midiInGetNumDevs_proc my_midiInGetNumDevs = (midiInGetNumDevs_proc)GetProcAddress(winmm, "midiInGetNumDevs");
@@ -374,7 +374,7 @@ int list_midi()
     if (nMidiDeviceNum == 0)
     {
         fprintf(stderr, "No Midi device found.\n");
-        return -1;
+        return 0;
     }
     printf("%lu available MIDI device(s)\n", nMidiDeviceNum);
     for (int i = 0; i < nMidiDeviceNum; i++)

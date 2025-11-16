@@ -191,6 +191,10 @@ static void *monitor_serial_thread(void *arg)
     while(1) {
         Sleep(1);
         DWORD status = get_modem_status_platform(h);
+        if (status != 0) {
+            printf("Out");
+        }
+
         int dit = (status & MS_CTS_ON) ? SET : UNSET;
         int dah = (status & MS_RLSD_ON) ? SET : UNSET;
 
