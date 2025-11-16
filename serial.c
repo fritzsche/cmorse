@@ -196,14 +196,6 @@ void *monitor_serial(void *arg)
         old_dit_status = dit_status;
         old_dah_status = dah_status;
 
-/*        if ((status & TIOCM_CD) != (old_status & TIOCM_CD))
-            printf("DCD changed to %d\n",
-                   (status & TIOCM_CD) ? 1 : 0);
-
-        if ((status & TIOCM_CTS) != (old_status & TIOCM_CTS))
-            printf("CTS changed to %d\n",
-                   (status & TIOCM_CTS) ? 1 : 0);
-*/
         old_status = status;
     }
 
