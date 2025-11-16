@@ -90,7 +90,9 @@ int query_serial_devices(SerialPortInfo devices[], int max_ports)
        //     strncmp(ent->d_name, "ttyS", 4) == 0 )
 #endif
         {
-            snprintf(devices[count].path, PORT_NAME_MAX_LEN, "/dev/%s", ent->d_name);
+            snprintf(devices[count].path, PORT_NAME_MAX_LEN, "/dev/%.*s", (int)(PORT_NAME_MAX_LEN - 6), ent->d_name);
+
+//            snprintf(devices[count].path, PORT_NAME_MAX_LEN, "/dev/%s", ent->d_name);
             strncpy(devices[count].base_name, ent->d_name, PORT_NAME_MAX_LEN - 1);
             devices[count].base_name[PORT_NAME_MAX_LEN - 1] = '\0';
             count++;
@@ -156,7 +158,6 @@ static int open_serial_port_platform(const char *path)
     return fd;
 }
 
-#if defined(__APPLE__)
 static int poll_modem_lines_platform(int fd, int old_status)
 {
     int status;
@@ -167,16 +168,7 @@ static int poll_modem_lines_platform(int fd, int old_status)
         nanosleep(&t,NULL);
     }
 }
-#else
-static int poll_modem_lines_platform(int fd, int old_status)
-{
-    int mask = TIOCM_CTS | TIOCM_CAR;
-    if (ioctl(fd,TIOCMIWAIT,mask)<0) return -1;
-    int status;
-    if (ioctl(fd,TIOCMGET,&status)<0) return -1;
-    return status;
-}
-#endif
+
 
 #endif
 
