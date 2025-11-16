@@ -137,7 +137,6 @@ int is_output(snd_ctl_t *ctl, int card, int device, int sub)
     return 0;
 }
 
-
 #define ALSA_MAX_DEV 20
 
 typedef struct alsa_midi_dev
@@ -223,8 +222,6 @@ void collect_subdevice_info(snd_ctl_t *ctl, int card, int device)
 
         in = is_input(ctl, card, device, sub);
         out = is_output(ctl, card, device, sub);
-
-
     }
 }
 
@@ -266,7 +263,7 @@ void collect_midi_devices()
         alsa_midi_dev_number = 0;
         if ((status = snd_card_next(&card)) < 0)
         {
-            error("cannot determine card number: %s", snd_strerror(status));
+            fprintf(stderr,"cannot determine card number: %s", snd_strerror(status));
             return;
         }
 
@@ -275,7 +272,7 @@ void collect_midi_devices()
             collect_midi_devices_on_card(card);
             if ((status = snd_card_next(&card)) < 0)
             {
-                error("cannot determine card number: %s", snd_strerror(status));
+                fprintf(stderr,"cannot determine card number: %s", snd_strerror(status));
                 break;
             }
         }
@@ -343,10 +340,11 @@ int list_midi()
 
 #if defined(__linux__)
     collect_midi_devices();
-    if (alsa_midi_dev_number == 0) {
-      error("No MIDI Device found\n");
-    } 
-    printf("%i MIDI device(s)\n",alsa_midi_dev_number);
+    if (alsa_midi_dev_number == 0)
+    {
+        fprintf(stderr,"No MIDI Device found\n");
+    }
+    printf("%i MIDI device(s)\n", alsa_midi_dev_number);
     for (int i = 0; i < alsa_midi_dev_number; i++)
     {
         printf("  %i hw:%d,%d,%d  %s\n",
@@ -423,9 +421,9 @@ int list_midi()
     ItemCount numOfSources = MyMIDIGetNumberOfSources();
     if (numOfSources == 0)
     {
-        #ifdef SERIAL_SUPPORT
-         return 0;
-        #endif 
+#ifdef SERIAL_SUPPORT
+        return 0;
+#endif
         printf("No MIDI sources found.\n");
         return 1;
     }
@@ -522,17 +520,21 @@ int open_midi(void *p_key_state, int midi_device)
     midi_parameter.p_midiin = NULL;
 
     char *portname;
-    if(midi_device == -1)
-      portname = strdup("hw:1,0,0");
-    else {
+    if (midi_device == -1)
+        portname = strdup("hw:1,0,0");
+    else
+    {
         collect_midi_devices();
         if (midi_device >= alsa_midi_dev_number)
-           error("Incorrect midi device number.");   
-        sprintf(name,"hw:%d,%d,%d",
-            alsa_midi_dev_array_in[midi_device].card,
-            alsa_midi_dev_array_in[midi_device].device,
-            alsa_midi_dev_array_in[midi_device].sub);
-        portname = strdup(name);    
+        {
+            fprintf(stderr, "Incorrect midi device number.\n");
+            return -1;
+        }
+        sprintf(name, "hw:%d,%d,%d",
+                alsa_midi_dev_array_in[midi_device].card,
+                alsa_midi_dev_array_in[midi_device].device,
+                alsa_midi_dev_array_in[midi_device].sub);
+        portname = strdup(name);
     }
 
     if ((status = snd_rawmidi_open(&(midi_parameter.p_midiin), NULL, portname, mode)) < 0)
@@ -586,7 +588,8 @@ int open_midi(void *p_key_state, int midi_device)
         return 1;
     }
     int my_midi_device = 0;
-    if(midi_device >= 0) my_midi_device = midi_device;
+    if (midi_device >= 0)
+        my_midi_device = midi_device;
     if (my_midi_device >= numOfSources)
     {
         printf("MIDI source device does not exist.\n");

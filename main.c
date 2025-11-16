@@ -21,6 +21,10 @@
 // #include <unistd.h>    /* for getopt */
 #include <getopt.h>
 
+//#if defined(__linux__)
+//#include <linux/time.h>
+//#endif
+
 #define VERSION "0.2"
 
 #define DEVICE_FORMAT ma_format_f32
