@@ -38,13 +38,15 @@
 #define MAX_PORTS 32
 #define PORT_NAME_MAX_LEN 256
 
-typedef struct {
+typedef struct
+{
     char path[PORT_NAME_MAX_LEN];
     char base_name[PORT_NAME_MAX_LEN];
 } SerialPortInfo;
 
-typedef struct {
-    void *handle;           /* POSIX: int fd via intptr_t, Windows: HANDLE */
+typedef struct
+{
+    void *handle; /* POSIX: int fd via intptr_t, Windows: HANDLE */
     key_state_type *p_key;
 } serial_parameter;
 
@@ -55,13 +57,15 @@ typedef struct {
 int query_serial_devices(SerialPortInfo devices[], int max_ports)
 {
     int count = 0;
-    for (int i = 1; i <= 256 && count < max_ports; ++i) {
+    for (int i = 1; i <= 256 && count < max_ports; ++i)
+    {
         char comName[64];
         snprintf(comName, sizeof(comName), "\\\\.\\COM%d", i);
 
         HANDLE h = CreateFileA(comName, GENERIC_READ | GENERIC_WRITE,
                                0, NULL, OPEN_EXISTING, 0, NULL);
-        if (h != INVALID_HANDLE_VALUE) {
+        if (h != INVALID_HANDLE_VALUE)
+        {
             strncpy(devices[count].path, comName, PORT_NAME_MAX_LEN - 1);
             devices[count].path[PORT_NAME_MAX_LEN - 1] = '\0';
             snprintf(devices[count].base_name, PORT_NAME_MAX_LEN, "COM%d", i);
@@ -75,10 +79,12 @@ int query_serial_devices(SerialPortInfo devices[], int max_ports)
 int query_serial_devices(SerialPortInfo devices[], int max_ports)
 {
     DIR *dir = opendir("/dev/");
-    if (!dir) return 0;
+    if (!dir)
+        return 0;
     struct dirent *ent;
     int count = 0;
-    while ((count < max_ports) && (ent = readdir(dir))) {
+    while ((count < max_ports) && (ent = readdir(dir)))
+    {
 #if defined(__APPLE__)
         if (strncmp(ent->d_name, "cu.", 3) == 0 ||
             strncmp(ent->d_name, "ttyUSB", 6) == 0 ||
@@ -86,13 +92,13 @@ int query_serial_devices(SerialPortInfo devices[], int max_ports)
             strncmp(ent->d_name, "tty.", 4) == 0)
 #else
         if (strncmp(ent->d_name, "ttyUSB", 6) == 0 ||
-            strncmp(ent->d_name, "ttyACM", 6) == 0 ) //||
-       //     strncmp(ent->d_name, "ttyS", 4) == 0 )
+            strncmp(ent->d_name, "ttyACM", 6) == 0) //||
+                                                    //     strncmp(ent->d_name, "ttyS", 4) == 0 )
 #endif
         {
             snprintf(devices[count].path, PORT_NAME_MAX_LEN, "/dev/%.*s", (int)(PORT_NAME_MAX_LEN - 6), ent->d_name);
 
-//            snprintf(devices[count].path, PORT_NAME_MAX_LEN, "/dev/%s", ent->d_name);
+            //            snprintf(devices[count].path, PORT_NAME_MAX_LEN, "/dev/%s", ent->d_name);
             strncpy(devices[count].base_name, ent->d_name, PORT_NAME_MAX_LEN - 1);
             devices[count].base_name[PORT_NAME_MAX_LEN - 1] = '\0';
             count++;
@@ -111,25 +117,31 @@ static HANDLE open_serial_port_platform(const char *path)
 {
     HANDLE h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE,
                            0, NULL, OPEN_EXISTING,
-                           FILE_FLAG_OVERLAPPED, NULL);
-    if (h == INVALID_HANDLE_VALUE) return INVALID_HANDLE_VALUE;
+                           0, NULL);
+    if (h == INVALID_HANDLE_VALUE)
+        return INVALID_HANDLE_VALUE;
 
     DCB dcb;
     memset(&dcb, 0, sizeof(dcb));
     dcb.DCBlength = sizeof(dcb);
-    if (!GetCommState(h, &dcb)) return INVALID_HANDLE_VALUE;
+    if (!GetCommState(h, &dcb))
+        return INVALID_HANDLE_VALUE;
 
     dcb.BaudRate = CBR_9600;
     dcb.ByteSize = 8;
-    dcb.Parity   = NOPARITY;
+    dcb.Parity = NOPARITY;
     dcb.StopBits = ONESTOPBIT;
     dcb.fOutxCtsFlow = FALSE;
     dcb.fOutxDsrFlow = FALSE;
-    dcb.fRtsControl = RTS_CONTROL_DISABLE;
+
+//    dcb.fRtsControl = RTS_CONTROL_DISABLE;
+    dcb.fRtsControl = RTS_CONTROL_ENABLE;
     dcb.fDtrControl = DTR_CONTROL_DISABLE;
+
+
     SetCommState(h, &dcb);
 
-    COMMTIMEOUTS to = {1,1,0,1,0};
+    COMMTIMEOUTS to = {1, 1, 0, 1, 0};
     SetCommTimeouts(h, &to);
 
     return h;
@@ -138,7 +150,8 @@ static HANDLE open_serial_port_platform(const char *path)
 static DWORD get_modem_status_platform(HANDLE h)
 {
     DWORD stat = 0;
-    if (!GetCommModemStatus(h, &stat)) return 0;
+    if (!GetCommModemStatus(h, &stat))
+        return 0;
     return stat;
 }
 
@@ -146,9 +159,11 @@ static DWORD get_modem_status_platform(HANDLE h)
 static int open_serial_port_platform(const char *path)
 {
     int fd = open(path, O_RDWR | O_NOCTTY | O_NONBLOCK);
-    if (fd < 0) return -1;
+    if (fd < 0)
+        return -1;
     struct termios tty;
-    if (tcgetattr(fd, &tty) == 0) {
+    if (tcgetattr(fd, &tty) == 0)
+    {
         cfmakeraw(&tty);
         cfsetspeed(&tty, B9600);
         tty.c_cflag |= (CLOCAL | CREAD);
@@ -161,14 +176,16 @@ static int open_serial_port_platform(const char *path)
 static int poll_modem_lines_platform(int fd, int old_status)
 {
     int status;
-    struct timespec t = {0,200000};
-    while(1) {
-        if (ioctl(fd,TIOCMGET,&status)<0) return -1;
-        if (status!=old_status) return status;
-        nanosleep(&t,NULL);
+    struct timespec t = {0, 200000};
+    while (1)
+    {
+        if (ioctl(fd, TIOCMGET, &status) < 0)
+            return -1;
+        if (status != old_status)
+            return status;
+        nanosleep(&t, NULL);
     }
 }
-
 
 #endif
 
@@ -177,63 +194,100 @@ static int poll_modem_lines_platform(int fd, int old_status)
 
 static void *monitor_serial_thread(void *arg)
 {
-    serial_parameter *param = (serial_parameter*)arg;
-    if (!param) return NULL;
+    serial_parameter *param = (serial_parameter *)arg;
+    if (!param)
+        return NULL;
 
 #if defined(PLATFORM_WINDOWS)
     HANDLE h = (HANDLE)param->handle;
     key_state_type *p_key = param->p_key;
+    DWORD event_mask;
 
+    // 1. Tell Windows which events to monitor
+    // We want to watch for changes to CTS (Clear-to-Send) and RLSD (DCD/Carrier)
+//    printf("DEBUG: Setting Comm Mask...\n");
+    if (!SetCommMask(h, EV_CTS | EV_RLSD))
+    {
+        fprintf(stderr, "Error: SetCommMask failed (Code: %lu)\n", GetLastError());
+        free(param);
+        return NULL;
+    }
+    //printf("DEBUG: SetCommMask OK.\n");
+    // 2. Get the initial state
     DWORD old_status = get_modem_status_platform(h);
     int old_dit = (old_status & MS_CTS_ON) ? SET : UNSET;
     int old_dah = (old_status & MS_RLSD_ON) ? SET : UNSET;
 
-    while(1) {
-        Sleep(1);
-        DWORD status = get_modem_status_platform(h);
-        if (status != 0) {
-            printf("Out");
+    while (1)
+    {
+        //printf("DEBUG: Calling WaitCommEvent (blocking)...\n");
+        //fflush(stdout);
+        // 3. Wait (block) efficiently for one of the masked events to occur
+        if (!WaitCommEvent(h, &event_mask, NULL))
+        {
+            // Error: This usually means the device was unplugged or the handle was closed
+            fprintf(stderr, "Error: WaitCommEvent failed (Code: %lu). Exiting thread.\n", GetLastError());
+            break; // Exit the loop
         }
+        //printf("EVENT DETECTED (Mask: 0x%lX)!\n", event_mask);
+        //fflush(stdout);
+        // 4. An event occurred! Get the new modem status
+        DWORD status = get_modem_status_platform(h);
 
+        // Your existing logic to process the change is perfect
         int dit = (status & MS_CTS_ON) ? SET : UNSET;
         int dah = (status & MS_RLSD_ON) ? SET : UNSET;
 
-        if (dit != old_dit) {
-            if (dit==SET) atomic_store(&(p_key->memory[DIT]),SET);
-            atomic_store(&(p_key->state[DIT]),dit);
-            old_dit=dit;
+        if (dit != old_dit)
+        {
+            if (dit == SET)
+                atomic_store(&(p_key->memory[DIT]), SET);
+            atomic_store(&(p_key->state[DIT]), dit);
+            old_dit = dit;
         }
-        if (dah != old_dah) {
-            if (dah==SET) atomic_store(&(p_key->memory[DAH]),SET);
-            atomic_store(&(p_key->state[DAH]),dah);
-            old_dah=dah;
+        if (dah != old_dah)
+        {
+            if (dah == SET)
+                atomic_store(&(p_key->memory[DAH]), SET);
+            atomic_store(&(p_key->state[DAH]), dah);
+            old_dah = dah;
         }
     }
-#else
+
+    // 5. Clean up
+    CloseHandle(h);
+
+#else // POSIX implementation (unchanged)
     int fd = (int)(intptr_t)param->handle;
     key_state_type *p_key = param->p_key;
     int old_status = 0;
-    ioctl(fd,TIOCMGET,&old_status);
+    ioctl(fd, TIOCMGET, &old_status);
     int old_dit = (old_status & TIOCM_CTS) ? SET : UNSET;
     int old_dah = (old_status & TIOCM_CAR) ? SET : UNSET;
 
-    while(1) {
-        int status = poll_modem_lines_platform(fd,old_status);
-        if (status<0) break;
-        int dit = (status & TIOCM_CTS)?SET:UNSET;
-        int dah = (status & TIOCM_CAR)?SET:UNSET;
+    while (1)
+    {
+        int status = poll_modem_lines_platform(fd, old_status);
+        if (status < 0)
+            break;
+        int dit = (status & TIOCM_CTS) ? SET : UNSET;
+        int dah = (status & TIOCM_CAR) ? SET : UNSET;
 
-        if (dit!=old_dit) {
-            if (dit==SET) atomic_store(&(p_key->memory[DIT]),SET);
-            atomic_store(&(p_key->state[DIT]),dit);
-            old_dit=dit;
+        if (dit != old_dit)
+        {
+            if (dit == SET)
+                atomic_store(&(p_key->memory[DIT]), SET);
+            atomic_store(&(p_key->state[DIT]), dit);
+            old_dit = dit;
         }
-        if (dah!=old_dah) {
-            if (dah==SET) atomic_store(&(p_key->memory[DAH]),SET);
-            atomic_store(&(p_key->state[DAH]),dah);
-            old_dah=dah;
+        if (dah != old_dah)
+        {
+            if (dah == SET)
+                atomic_store(&(p_key->memory[DAH]), SET);
+            atomic_store(&(p_key->state[DAH]), dah);
+            old_dah = dah;
         }
-        old_status=status;
+        old_status = status;
     }
     close(fd);
 #endif
@@ -248,47 +302,67 @@ static void *monitor_serial_thread(void *arg)
 int list_serial(void)
 {
     SerialPortInfo devices[MAX_PORTS];
-    int count = query_serial_devices(devices,MAX_PORTS);
-    if (count<=0) {
+    int count = query_serial_devices(devices, MAX_PORTS);
+    if (count <= 0)
+    {
         printf("No serial devices found.\n");
         return 0;
     }
-    printf("%d available Serial Devices\n",count);
-    for(int i=0;i<count;i++)
-        printf(" %d: %s\n",i+1,devices[i].path);
+    printf("%d available Serial Devices\n", count);
+    for (int i = 0; i < count; i++)
+        printf(" %d: %s\n", i + 1, devices[i].base_name);    
     return count;
 }
 
-int open_serial(void *p_key_state,int serial_device)
+int open_serial(void *p_key_state, int serial_device)
 {
     SerialPortInfo devices[MAX_PORTS];
-    int count = query_serial_devices(devices,MAX_PORTS);
-    if (count<=0) { fprintf(stderr,"No serial devices.\n"); return -1; }
-    if (serial_device<1 || serial_device>count) {
-        fprintf(stderr,"Invalid serial device number %d\n",serial_device);
+    int count = query_serial_devices(devices, MAX_PORTS);
+    if (count <= 0)
+    {
+        fprintf(stderr, "No serial devices.\n");
+        return -1;
+    }
+    if (serial_device < 1 || serial_device > count)
+    {
+        fprintf(stderr, "Invalid serial device number %d\n", serial_device);
         return -1;
     }
 
-    const char *path = devices[serial_device-1].path;
-    printf("Using serial port: %s\n",path);
+    const char *path = devices[serial_device - 1].path;
+    const char *base_name = devices[serial_device - 1].base_name;
+    printf("Using serial port: %s\n", base_name);
 
     serial_parameter *param = malloc(sizeof(serial_parameter));
-    if(!param) { fprintf(stderr,"Out of memory\n"); return -1; }
-    param->p_key = (key_state_type*)p_key_state;
+    if (!param)
+    {
+        fprintf(stderr, "Out of memory\n");
+        return -1;
+    }
+    param->p_key = (key_state_type *)p_key_state;
 
 #if defined(PLATFORM_WINDOWS)
     HANDLE h = open_serial_port_platform(path);
-    if(h==INVALID_HANDLE_VALUE) { free(param); return -1; }
-    param->handle = (void*)h;
+    if (h == INVALID_HANDLE_VALUE)
+    {
+        free(param);
+        return -1;
+    }
+    param->handle = (void *)h;
 #else
     int fd = open_serial_port_platform(path);
-    if(fd<0) { free(param); return -1; }
-    param->handle = (void*)(intptr_t)fd;
+    if (fd < 0)
+    {
+        free(param);
+        return -1;
+    }
+    param->handle = (void *)(intptr_t)fd;
 #endif
 
     pthread_t thr;
-    if(pthread_create(&thr,NULL,monitor_serial_thread,param)!=0){
-        fprintf(stderr,"pthread_create failed\n");
+    if (pthread_create(&thr, NULL, monitor_serial_thread, param) != 0)
+    {
+        fprintf(stderr, "pthread_create failed\n");
 #if defined(PLATFORM_WINDOWS)
         CloseHandle((HANDLE)param->handle);
 #else
