@@ -56,22 +56,37 @@ typedef struct
 #if defined(PLATFORM_WINDOWS)
 int query_serial_devices(SerialPortInfo devices[], int max_ports)
 {
+    char buffer[16384*8];
     int count = 0;
-    for (int i = 1; i <= 256 && count < max_ports; ++i)
-    {
-        char comName[64];
-        snprintf(comName, sizeof(comName), "\\\\.\\COM%d", i);
 
-        HANDLE h = CreateFileA(comName, GENERIC_READ | GENERIC_WRITE,
-                               0, NULL, OPEN_EXISTING, 0, NULL);
-        if (h != INVALID_HANDLE_VALUE)
-        {
-            strncpy(devices[count].path, comName, PORT_NAME_MAX_LEN - 1);
-            devices[count].path[PORT_NAME_MAX_LEN - 1] = '\0';
-            snprintf(devices[count].base_name, PORT_NAME_MAX_LEN, "COM%d", i);
-            CloseHandle(h);
+    // Get the list of all DOS device names
+    DWORD len = QueryDosDeviceA(NULL, buffer, sizeof(buffer));
+    if (len == 0) {
+        fprintf(stderr, "Error: QueryDosDeviceA failed (Code: %lu)\n", GetLastError());
+        fflush(stderr);        
+        // Handle error
+        exit -1;
+    }
+    // The buffer contains a list of null-terminated strings,
+    // one after another, ending with an extra null.
+    char* p = buffer;
+    while (*p && count < max_ports) {
+        fflush(stdout);        
+
+        // We only care about names that start with "COM"
+        // and are followed by a number (to filter out other devices)
+        if (strncmp(p, "COM", 3) == 0 && isdigit((unsigned char)p[3])) {
+            
+            // Store the base name (e.g., "COM5")
+            snprintf(devices[count].base_name, PORT_NAME_MAX_LEN, "%s", p);
+
+            // Store the full path (e.g., "\\.\COM5")
+            snprintf(devices[count].path, PORT_NAME_MAX_LEN, "\\\\.\\%s", p);
+            
             count++;
         }
+        // Move to the next string in the list
+        p += strlen(p) + 1;
     }
     return count;
 }
