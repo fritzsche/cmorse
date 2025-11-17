@@ -326,7 +326,7 @@ int list_serial(void)
     printf("%d available Serial Devices\n", count);
     for (int i = 0; i < count; i++)
         printf(" %d: %s\n", i + 1, devices[i].base_name);    
-    return count;
+    return 0;
 }
 
 int open_serial(void *p_key_state, int serial_device)

@@ -775,8 +775,10 @@ int main(int argc, char **argv)
         deviceConfig.wasapi.usage = ma_wasapi_usage_pro_audio;
         deviceConfig.noPreSilencedOutputBuffer = MA_TRUE;
         deviceConfig.noClip = MA_TRUE;
-        deviceConfig.noFixedSizedCallback = MA_TRUE;
+     //   deviceConfig.noFixedSizedCallback = MA_TRUE;
     }
+    deviceConfig.wasapi.noAutoConvertSRC = MA_TRUE;
+    deviceConfig.wasapi.noDefaultQualitySRC = MA_TRUE;
 #endif
 
     //    deviceConfig.sampleRate        = DEVICE_SAMPLE_RATE;
