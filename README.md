@@ -17,6 +17,12 @@ You need to have software/hardware to support it. Particular wireless (bluetooth
 
 Additionally your PC should not run performance intensive software in the background like Virus Scan or Windows Update.
 
+# Windows and low latency
+Low latency audio is particular on windows a problem. Standard windows drivers I tested had been often of very bad quality.
+Additionally the windows audio interface adds already some significant latency in the so called shared mode. This can create problems is noticeable from 20-25 WPM and gets a problem from > 30 WPM.
+Starting with version 0.2 you can run the audio interface in the so called "exclusive" mode. In exclusive mode cmorse can directly access the audio device with significant reduced latency. This is not working stable for all hardware/driver I have tested. In my experience buffer side should be 128. The best results I received with a USB Audio interface (Focusrite Scarlett) that allowed a stable sampling rate of 98 kHz. This setup is running on the Windows standard driver not on ASIO. ASIO is not (yet?) supported as of copyright concerns and the audio interface running good enough.
+
+
 ## Building Software
 The software was developed on Mac(Intel) and ported to Windows and Linux operating system. In this early stage I only provide the source code that need to be compiled using cmake.
 
@@ -31,14 +37,24 @@ By default the sketch would configure pin 2/3 as Pull-Up Input for dit/dah conta
 With the Teensy 4.1 I measured the lowest latency and should be preferred if high speed keying is important.
 
 
+## Serial USB device
+Starting with version 0.2 cmorse supports connecting your a morse code via a serial interface.
+Disclaimer: There are many different devices available and I can only support my own HW. You are responsible for your setup.
+I personally use a USD-Serial adapter that claims to have an original FTDI-Chip.
+The common ground is connected to **RTS**, the left (dit) paddel is connected to **CTS** and the right (dah) paddel is connected to **DCD**.
+Technically there is key bouncing, but the IAMBIC B mode as correctly implemented here does not have any problem with bouncing as keying is controlled by the keying memory. So it working perfectly without HW or software de-bouncing.
+
+The setup is identical to the setup SDR Control Mac software by Marcus Roskosch. You find more information in the manual of this software.
+
+
 # Usage
 
 The program has the following command line parameters:
 ```
 ./cmorse --help
-cmorse 0.1 - (c) 2024 by Thomas Fritzsche, DJ1TF
+cmorse 0.2 - (c) 2024 by Thomas Fritzsche, DJ1TF
 
-cmorse [-w wpm] [-f frequency] [-p frames per package] [-h]
+cmorse [-w wpm] [-f frequency] [-p frames per package] [-h] [-m device]
 
    -w wpm --wpm wpm
        Specify the speed of the keyer in words per minute(wpm).
@@ -54,19 +70,41 @@ cmorse [-w wpm] [-f frequency] [-p frames per package] [-h]
        The smaller the number of frames the lower the latency.
        Default value for the number of frames is 128 frames.
 
+   -l --list
+       List all the available midi source devices and audio devices
+
+   -m device --midi device
+       Use specified midi source device
+
+   -c device --serial device
+       Use specified serial source device.
+
+   -a device --audio device
+       Use specified audio device for output.
+
    -s --straight
        Straight key mode.
+
+   -x --exclusive (Windows only)
+        Use the WASAPI exclusive mode. **Experimental**       
 
    -h
        Print this help text.
 ```
 
-Please notice the cmorse will use the default audio device you setup on your computer and the first MIDI input derive. If you have connected multiple Midi hardware to your computer you need to disconnect it.
+Please notice the cmorse will use the default audio device you setup on your computer and the first MIDI input derive. 
+Using the option "--list" you receive a list of all hardware devices: midi / serial usb adapter and audio devices. 
+
+
+
+
 
 # Alpha Code
 The code is in pre-beta stage and provided as is. There is no guarantee it works correct. So usage of this software is at your own risk. As of the early stage the software is likely to change frequently without prior notice.
 
 # Version History
+0.2 - Windows Audio Exclusive mode for lower latency
+    - support of serial usb adapter.
 0.1 - Initial Alpha Version.
 
 # License

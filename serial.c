@@ -181,7 +181,9 @@ static int open_serial_port_platform(const char *path)
     {
         cfmakeraw(&tty);
         cfsetspeed(&tty, B9600);
-        tty.c_cflag |= (CLOCAL | CREAD);
+        //tty.c_cflag |= (CLOCAL | CREAD);
+        tty.c_cflag |= CREAD;      // Enable receiver
+        tty.c_cflag &= ~CLOCAL;
         tty.c_cflag &= ~CRTSCTS;
         tcsetattr(fd, TCSANOW, &tty);
     }
