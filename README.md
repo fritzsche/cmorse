@@ -9,6 +9,7 @@ You can connect a morse paddle or straight key via a arduino to your computer as
 * Output of decoded text keyed text according international morse code.
 * Low latency optimized
 * Mac (development system)/Linux/Windows 10/11 (MINGW64)
+* Support serial usb connected morse key.
 
 ## Low Latency 
 cmorse is written with low latency in mind to achieve 25-40 WPM keying speeds. To C programming language is used to support direct access to Audio/Midi interface of the operating systems. This is the main difference on other earlier attempts to implement high speed morse keying on a PC.
