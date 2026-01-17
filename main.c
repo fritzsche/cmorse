@@ -34,7 +34,7 @@
 
 #define SIN_FREQ 500
 
-#define DEFAULT_VOLUME 95
+#define DEFAULT_VOLUME 90
 #define DEFAULT_WPM 25
 
 #define RING_BUFFER_SIZE 1024
