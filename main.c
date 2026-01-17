@@ -25,7 +25,7 @@
 //#include <linux/time.h>
 //#endif
 
-#define VERSION "0.2"
+#define VERSION "0.3"
 
 #define DEVICE_FORMAT ma_format_f32
 #define DEVICE_CHANNELS 1
@@ -33,7 +33,8 @@
 #define DEVICE_FRAMES 128
 
 #define SIN_FREQ 500
-#define SIN_AMP 0.2
+
+#define DEFAULT_VOLUME 95
 #define DEFAULT_WPM 25
 
 #define RING_BUFFER_SIZE 1024
@@ -520,6 +521,8 @@ void help()
     printf("       Use specified audio device for output.\n\n");
     printf("   -s --straight\n");
     printf("       Straight key mode.\n\n");
+    printf("   -v --volume\n");
+    printf("       volume in percent (0-100).\n\n");
 
 #ifdef _WIN64
     printf("   -x --exclusive\n");
@@ -538,6 +541,7 @@ typedef struct config_data
     int midi_device;   // device number of the source midi device
     int audio_device;  // device number of the source audio device
     int serial_device; // device number of a source serial device
+    int volume;        // volume
 #ifdef _WIN64
     boolean wasapi_exclusive; // Use the wasapi exclusive mode
 #endif
@@ -554,6 +558,7 @@ int process_options(int argc, char **argv, config_type *conf)
     conf->wpm = DEFAULT_WPM;
     conf->frequency = SIN_FREQ;
     conf->mode = IAMBIC_B;
+    conf->volume = DEFAULT_VOLUME;
     conf->midi_device = -1;
     conf->audio_device = -1;
     conf->serial_device = -1;    
@@ -574,10 +579,11 @@ int process_options(int argc, char **argv, config_type *conf)
         {"serial", required_argument, NULL, 'c'},
 #endif        
         {"audio", required_argument, NULL, 'a'},
+        {"volume", required_argument, NULL, 'v'},        
         {"help", no_argument, NULL, 'h'},
 
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:m:c:a:lhsx",
+    while ((c = getopt_long(argc, argv, "w:f:p:m:c:a:v:lhsx",
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -591,6 +597,9 @@ int process_options(int argc, char **argv, config_type *conf)
         case 'p':
             conf->frames = atoi(optarg);
             break;
+        case 'v':
+            conf->volume = atoi(optarg);
+            break;            
         case 'h':
             help();
             exit(-1);
@@ -661,6 +670,23 @@ int list_audio()
 
     return 0;
 }
+
+
+float calculateAmplitude(int volumePercent) {
+    if (volumePercent <= 0) return 0.0f;
+    if (volumePercent >= 100) return 1.0f;
+
+    // We define the max and minvolume between  -60 dB and 0 dB.
+    // -60 dB is almost impossible to hear.
+    float minDb = -60.0f; 
+    
+    // we recalculate in db
+    float db = minDb * (1.0f - (volumePercent / 100.0f));
+
+    // Return the resulting power level
+    return powf(10.0f, db / 20.0f);
+}
+
 
 int main(int argc, char **argv)
 {
@@ -795,7 +821,7 @@ int main(int argc, char **argv)
         return -4;
     }
 
-    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, SIN_AMP, conf.frequency);
+    sineWaveConfig = ma_waveform_config_init(device.playback.format, device.playback.channels, device.sampleRate, ma_waveform_type_sine, calculateAmplitude(conf.volume), conf.frequency);
     ma_waveform_init(&sineWaveConfig, &sineWave);
 
     printf("Audio Device Name: %s\n", device.playback.name);

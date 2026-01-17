@@ -89,6 +89,9 @@ cmorse [-w wpm] [-f frequency] [-p frames per package] [-h] [-m device]
    -x --exclusive (Windows only)
         Use the WASAPI exclusive mode. **Experimental**       
 
+   -v --volume
+       volume in percent (0-100).
+
    -h
        Print this help text.
 ```
@@ -104,6 +107,7 @@ Using the option "--list" you receive a list of all hardware devices: midi / ser
 The code is in pre-beta stage and provided as is. There is no guarantee it works correct. So usage of this software is at your own risk. As of the early stage the software is likely to change frequently without prior notice.
 
 # Version History
+0.3 - Add parameter to specify volume
 0.2 - Windows Audio Exclusive mode for lower latency
     - support of serial usb adapter.
 0.1 - Initial Alpha Version.
