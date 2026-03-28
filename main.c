@@ -380,14 +380,16 @@ void straight_key_callback(ma_device *pDevice, void *pOutput, const void *pInput
         {
             userData->current_element = RAMP_UP;
             userData->envelop[RAMP_UP].playback_position = 0;
-            non_block_write_straight(userData->pDecoderRb, 0, userData->sample_count);
+            if (userData->pDecoderRb)
+                non_block_write_straight(userData->pDecoderRb, 0, userData->sample_count);
         }
         // State: key down (pressed), but we register no key pressed --> ramp down
         if (userData->current_element == KEY_DOWN && (!atomic_load(&(userData->key.state[DIT])) && !atomic_load(&(userData->key.state[DAH]))))
         {
             userData->current_element = RAMP_DOWN;
             userData->envelop[RAMP_DOWN].playback_position = 0;
-            non_block_write_straight(userData->pDecoderRb, 1, userData->sample_count);
+            if (userData->pDecoderRb)
+                non_block_write_straight(userData->pDecoderRb, 1, userData->sample_count);
         }
         switch (userData->current_element)
         {
@@ -439,7 +441,8 @@ void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, 
         if (ce == NONE && atomic_load(&(userData->key.memory[DIT])))
         { // DIT
             if (userData->last_element_end_frame && userData->sample_count - userData->last_element_end_frame > 7 * userData->sample_per_dit)
-                non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
+                if (userData->pDecoderRb)
+                    non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
             ce = DIT;
             userData->current_element = DIT;
             userData->envelop[ce].playback_position = 0;
@@ -449,7 +452,8 @@ void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, 
             if (ce == NONE && atomic_load(&(userData->key.memory[DAH])))
             { // DAH
                 if (userData->last_element_end_frame && userData->sample_count - userData->last_element_end_frame > 7 * userData->sample_per_dit)
-                    non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
+                    if (userData->pDecoderRb)
+                        non_block_write(userData->pDecoderRb, DECODER_SPACE_CHAR);
                 ce = DAH;
                 userData->current_element = DAH;
                 userData->envelop[ce].playback_position = 0;
@@ -462,10 +466,13 @@ void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, 
             // check at we at the end of the element
             if (userData->envelop[ce].playback_position == userData->envelop[ce].length)
             {
-                if (userData->current_element == DIT)
-                    non_block_write(userData->pDecoderRb, '.');
-                else
-                    non_block_write(userData->pDecoderRb, '-');
+                if (userData->pDecoderRb)
+                {
+                    if (userData->current_element == DIT)
+                        non_block_write(userData->pDecoderRb, '.');
+                    else
+                        non_block_write(userData->pDecoderRb, '-');
+                }
                 // reset the payback position of the envelope at end of the element
                 userData->envelop[ce].playback_position = 0;
                 // if at the end of an element the respective key is not pressed: delete the memory
@@ -483,7 +490,8 @@ void paddle_key_callback(ma_device *pDevice, void *pOutput, const void *pInput, 
                         userData->current_element = NONE;
                         // store the table we finished the character
                         userData->last_element_end_frame = userData->sample_count;
-                        non_block_write(userData->pDecoderRb, DECODER_END_OF_CHAR);
+                        if (userData->pDecoderRb)
+                            non_block_write(userData->pDecoderRb, DECODER_END_OF_CHAR);
                     }
                 }
             }
@@ -523,6 +531,8 @@ void help()
     printf("       Straight key mode.\n\n");
     printf("   -v --volume\n");
     printf("       volume in percent (0-100).\n\n");
+    printf("   -d --disable-decoder\n");
+    printf("       Disable decoded text output.\n\n");
 
 #ifdef _WIN64
     printf("   -x --exclusive\n");
@@ -542,6 +552,7 @@ typedef struct config_data
     int audio_device;  // device number of the source audio device
     int serial_device; // device number of a source serial device
     int volume;        // volume
+    int disable_decoder; // disable decoder output
 #ifdef _WIN64
     boolean wasapi_exclusive; // Use the wasapi exclusive mode
 #endif
@@ -561,7 +572,8 @@ int process_options(int argc, char **argv, config_type *conf)
     conf->volume = DEFAULT_VOLUME;
     conf->midi_device = -1;
     conf->audio_device = -1;
-    conf->serial_device = -1;    
+    conf->serial_device = -1;
+    conf->disable_decoder = 0;
 #ifdef _WIN64
     conf->wasapi_exclusive = 0;
 #endif
@@ -579,11 +591,12 @@ int process_options(int argc, char **argv, config_type *conf)
         {"serial", required_argument, NULL, 'c'},
 #endif        
         {"audio", required_argument, NULL, 'a'},
-        {"volume", required_argument, NULL, 'v'},        
+        {"volume", required_argument, NULL, 'v'},
+        {"disable-decoder", no_argument, NULL, 'd'},
         {"help", no_argument, NULL, 'h'},
 
         {NULL, 0, NULL, 0}};
-    while ((c = getopt_long(argc, argv, "w:f:p:m:c:a:v:lhsx",
+    while ((c = getopt_long(argc, argv, "w:f:p:m:c:a:v:lhsxd",
                             long_options, &option_index)) != -1)
     {
         switch (c)
@@ -625,6 +638,9 @@ int process_options(int argc, char **argv, config_type *conf)
             break;
         case 'l':
             list_device = true;
+            break;
+        case 'd':
+            conf->disable_decoder = 1;
             break;
         case '?':
             return -1;
@@ -832,6 +848,8 @@ int main(int argc, char **argv)
 #endif
     printf("Sidetone Frequency: %dHz   WPM: %d   \n", conf.frequency, conf.wpm);
     printf("Keyermode: %s\n", conf.mode == 'S' ? "Straight" : "Iambic B");
+    if (conf.disable_decoder)
+        printf("Decoder: disabled\n");
 
     atomic_store(&(userData.key.memory[DIT]), 0);
     atomic_store(&(userData.key.memory[DAH]), 0);
@@ -839,7 +857,7 @@ int main(int argc, char **argv)
     atomic_store(&(userData.key.state[DAH]), 0);
 
     userData.pWaveForm = &sineWave;
-    userData.pDecoderRb = &ring_buffer;
+    userData.pDecoderRb = conf.disable_decoder ? NULL : &ring_buffer;
     userData.sample_count = 0;
     userData.sample_per_dit = samples_per_dit(conf.wpm, device.sampleRate);
     if (conf.mode == STRAIGHT_KEY)
@@ -849,28 +867,34 @@ int main(int argc, char **argv)
     userData.current_element = NONE;
     userData.last_element_end_frame = 0;
 
-    int memory_size = conf.mode == STRAIGHT_KEY ? sizeof(straight_key_decoder_type) * RING_BUFFER_SIZE : RING_BUFFER_SIZE;
-    if (ma_rb_init(memory_size, NULL, NULL, userData.pDecoderRb) != MA_SUCCESS)
+    if (!conf.disable_decoder)
     {
-        fprintf(stderr, "Failed to initialize ring buffer");
-        return -1;
+        int memory_size = conf.mode == STRAIGHT_KEY ? sizeof(straight_key_decoder_type) * RING_BUFFER_SIZE : RING_BUFFER_SIZE;
+        if (ma_rb_init(memory_size, NULL, NULL, userData.pDecoderRb) != MA_SUCCESS)
+        {
+            fprintf(stderr, "Failed to initialize ring buffer");
+            return -1;
+        }
     }
 
-    pthread_t thid;
-
-    if (conf.mode == STRAIGHT_KEY)
+    if (!conf.disable_decoder)
     {
-        straight_conf_type decoder_conf = {.wpm = conf.wpm, .sample_rate = device.sampleRate, .p_ring_buffer = userData.pDecoderRb};
-        if (pthread_create(&thid, NULL, straight_decoder_thread, &decoder_conf) != 0)
+        pthread_t thid;
+
+        if (conf.mode == STRAIGHT_KEY)
+        {
+            straight_conf_type decoder_conf = {.wpm = conf.wpm, .sample_rate = device.sampleRate, .p_ring_buffer = userData.pDecoderRb};
+            if (pthread_create(&thid, NULL, straight_decoder_thread, &decoder_conf) != 0)
+            {
+                perror("pthread_create() error");
+                exit(-1);
+            }
+        }
+        else if (pthread_create(&thid, NULL, paddle_decoder_thread, userData.pDecoderRb) != 0)
         {
             perror("pthread_create() error");
             exit(-1);
         }
-    }
-    else if (pthread_create(&thid, NULL, paddle_decoder_thread, userData.pDecoderRb) != 0)
-    {
-        perror("pthread_create() error");
-        exit(-1);
     }
 
     if (ma_device_start(&device) != MA_SUCCESS)
